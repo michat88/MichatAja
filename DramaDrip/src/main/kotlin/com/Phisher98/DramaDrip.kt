@@ -172,12 +172,11 @@ open class DramaDrip : MainAPI() {
             }
         }
 
-        // 3. Logika Episode Baru (Bersih dari bug "Episode 720")
+        // 3. Logika Episode Baru
         if (tvType == TvType.TvSeries) {
             val episodes = mutableListOf<Episode>()
 
             if (responseData?.meta?.videos != null && responseData.meta.videos.isNotEmpty()) {
-                // Menggunakan data dari Cinemeta untuk membuat list episode
                 responseData.meta.videos.forEach { video ->
                     val epData = LinkData(
                         tmdbId = tmdbId?.toIntOrNull(),
@@ -200,7 +199,6 @@ open class DramaDrip : MainAPI() {
                     )
                 }
             } else {
-                // Jika tidak ada metadata, jangan scraping tombol download yang rusak
                 throw ErrorLoadingException("Metadata episode tidak ditemukan. Cek koneksi internet.")
             }
 
@@ -250,9 +248,18 @@ open class DramaDrip : MainAPI() {
         
         val req = tryParseJson<LinkData>(data) ?: return false
         
-        // 4. Logika LoadLinks Paralel (Cepat)
-        // Menggunakan runAllAsync agar semua sumber dipanggil bersamaan
         runAllAsync(
+            {
+                // 0. Adimoviebox (ADDED & PRIORITAS UTAMA)
+                DramaDripExtractor.invokeAdimoviebox(
+                    title = req.title ?: return@runAllAsync,
+                    year = req.year,
+                    season = req.season,
+                    episode = req.episode,
+                    subtitleCallback = subtitleCallback,
+                    callback = callback
+                )
+            },
             {
                 // 1. JeniusPlay (via Idlix)
                 DramaDripExtractor.invokeIdlix(
