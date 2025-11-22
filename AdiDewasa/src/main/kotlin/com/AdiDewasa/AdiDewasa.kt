@@ -16,22 +16,16 @@ class AdiDewasa : MainAPI() {
     override val hasDownloadSupport = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.AsianDrama)
 
+    // MODIFIKASI 1: Menghapus pengecekan settingsForProvider.enableAdult
+    // Semua kategori akan langsung dimuat.
     override val mainPage: List<MainPageData>
         get() {
-            val basePages = mutableListOf<MainPageData>() // Mengubah dari inisialisasi awal ke list kosong
-
-            if (settingsForProvider.enableAdult) {
-                basePages.addAll(
-                    listOf(
-                        MainPageData("Adult Recently Added", "-1:1:adult"),
-                        MainPageData("Adult Movies", "2:6:adult"),
-                        MainPageData("Adult TV-Shows", "1:3:adult"),
-                        MainPageData("Adult Most Watched", "-1:5:adult"),
-                    )
-                )
-            }
-
-            return basePages
+            return listOf(
+                MainPageData("Adult Recently Added", "-1:1:adult"),
+                MainPageData("Adult Movies", "2:6:adult"),
+                MainPageData("Adult TV-Shows", "1:3:adult"),
+                MainPageData("Adult Most Watched", "-1:5:adult"),
+            )
         }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
@@ -45,12 +39,13 @@ class AdiDewasa : MainAPI() {
 
             val isAdultSection = adultFlag == "adult"
 
+            // MODIFIKASI 2: Memaksa "adult": true agar server selalu mengirim konten
             val jsonPayload = """{
                 "page": $page,
                 "type": "$type",
                 "country": -1,
                 "sort": $sort,
-                "adult": ${settingsForProvider.enableAdult},
+                "adult": true,
                 "adultOnly": $isAdultSection,
                 "ignoreWatched": false,
                 "genres": [],
@@ -86,10 +81,8 @@ class AdiDewasa : MainAPI() {
 
     private fun MediaItem.toSearchResult(): SearchResponse? {
         try {
-            // Skip adult content if not enabled
-            if (!settingsForProvider.enableAdult && (this.isAdult ?: 0) == 1) {
-                return null
-            }
+            // MODIFIKASI 3: Menghapus blok filter "if (!settingsForProvider.enableAdult...)"
+            // Sekarang semua item akan di-return tanpa disembunyikan.
 
             // Use title or name, whichever is available
             val itemTitle = this.title ?: this.name ?: "Unknown Title"
@@ -232,7 +225,6 @@ class AdiDewasa : MainAPI() {
                 subJson?.optJSONArray(bestQualityKey)?.let { array ->
                     for (i in 0 until array.length()) {
                         val subUrl = array.getString(i)
-                        // PERBAIKAN: Mengganti SubtitleFile(...) dengan newSubtitleFile(...)
                         subtitleCallback(newSubtitleFile("English", mainUrl + subUrl))
                     }
                 }
