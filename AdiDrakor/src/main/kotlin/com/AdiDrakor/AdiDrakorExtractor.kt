@@ -98,7 +98,7 @@ object AdiDrakorExtractor : AdiDrakor() {
     // ================== END ADIMOVIEBOX ==================
 
 
-    // ================== ADIDEWASA (Dramafull) SOURCE (ADDED) ==================
+    // ================== ADIDEWASA (Dramafull) SOURCE (FIXED) ==================
     suspend fun invokeAdiDewasa(
         title: String,
         season: Int?,
@@ -112,7 +112,6 @@ object AdiDrakorExtractor : AdiDrakor() {
         val searchUrl = "$baseUrl/api/live-search/$title"
         val searchRes = app.get(searchUrl).parsedSafe<AdiDewasaSearchResponse>()?.data ?: return
         
-        // Cari yang paling mirip
         val match = searchRes.find { it.title.equals(title, true) } 
             ?: searchRes.firstOrNull { it.title?.contains(title, true) == true } 
             ?: return
@@ -120,19 +119,17 @@ object AdiDrakorExtractor : AdiDrakor() {
         val slug = match.slug ?: return
         var targetUrl = "$baseUrl/film/$slug"
 
-        // 2. Handle Episode (Jika Series)
+        // 2. Handle Episode
         if (season != null && episode != null) {
             val doc = app.get(targetUrl).document
-            // Cari link episode tertentu
             val epLink = doc.select("div.episode-item a, .episode-list a").find { 
                 val txt = it.text()
-                // Regex cari angka episode
                 val epNum = Regex("""Episode\s*(\d+)""", RegexOption.IGNORE_CASE).find(txt)?.groupValues?.get(1)?.toIntOrNull()
                     ?: Regex("""^(\d+)$""").find(txt.trim())?.groupValues?.get(1)?.toIntOrNull()
                 epNum == episode
             }?.attr("href")
 
-            if (epLink == null) return // Episode tidak ketemu
+            if (epLink == null) return
             targetUrl = if(epLink.startsWith("http")) epLink else "$baseUrl$epLink"
         }
 
@@ -145,26 +142,27 @@ object AdiDrakorExtractor : AdiDrakor() {
         val resJson = JSONObject(res)
         val videoSource = resJson.optJSONObject("video_source") ?: return
 
-        // Loop kualitas
         val qualities = videoSource.keys().asSequence().toList()
             .sortedByDescending { key -> Regex("(\\d+)").find(key)?.groupValues?.get(1)?.toIntOrNull() ?: 0 }
 
         qualities.forEach { qualityKey ->
             val videoUrl = videoSource.optString(qualityKey)
             if (videoUrl.isNotEmpty()) {
+                // PERBAIKAN: Menggunakan lambda block untuk referer dan quality
                 callback.invoke(
                     newExtractorLink(
                         "AdiDewasa",
                         "AdiDewasa $qualityKey",
                         videoUrl,
-                        referer = baseUrl,
-                        quality = getQualityFromName(qualityKey)
-                    )
+                        ExtractorLinkType.VIDEO
+                    ) {
+                        this.referer = baseUrl
+                        this.quality = getQualityFromName(qualityKey)
+                    }
                 )
             }
         }
 
-        // Handle Subtitle
         val firstKey = qualities.firstOrNull()
         if (firstKey != null) {
             val subJson = resJson.optJSONObject("sub")
@@ -178,7 +176,6 @@ object AdiDrakorExtractor : AdiDrakor() {
         }
     }
 
-    // Data class internal untuk AdiDewasa
     data class AdiDewasaSearchResponse(val data: List<AdiDewasaItem>?)
     data class AdiDewasaItem(val title: String?, val slug: String?)
     // ================== END ADIDEWASA ==================
