@@ -945,4 +945,86 @@ object AdiDrakorExtractor : AdiDrakor() {
 
     }
 
+    // ================== ADIDEWASA (ADDED) ==================
+    suspend fun invokeAdiDewasa(
+        title: String,
+        year: Int?,
+        season: Int?,
+        episode: Int?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        val baseUrl = "https://dramafull.cc"
+        
+        // 1. PENCARIAN
+        val cleanQuery = title.trim().replace(" ", "%20")
+        val searchUrl = "$baseUrl/api/live-search/$cleanQuery"
+        
+        try {
+            val searchRes = app.get(searchUrl).parsedSafe<AdiDewasaSearchResponse>()
+            
+            // 2. FILTERING
+            val matchedItem = searchRes?.data?.find { item ->
+                val itemTitle = item.title ?: item.name ?: ""
+                val cleanItemTitle = itemTitle.lowercase().replace(Regex("[^a-z0-9]"), "")
+                val cleanTargetTitle = title.lowercase().replace(Regex("[^a-z0-9]"), "")
+                cleanItemTitle.contains(cleanTargetTitle) || cleanTargetTitle.contains(cleanItemTitle)
+            } ?: return 
+
+            val slug = matchedItem.slug ?: return
+            var targetUrl = "$baseUrl/film/$slug"
+
+            // 3. EPISODE HANDLING
+            if (season != null && episode != null) {
+                val doc = app.get(targetUrl).document
+                val episodeHref = doc.select("div.episode-item a, .episode-list a").find { 
+                    val text = it.text().trim()
+                    val epNum = Regex("""(\d+)""").find(text)?.groupValues?.get(1)?.toIntOrNull()
+                    epNum == episode
+                }?.attr("href")
+
+                if (episodeHref == null) return
+                targetUrl = fixUrl(episodeHref, baseUrl)
+            }
+
+            // 4. VIDEO EXTRACTION
+            val docPage = app.get(targetUrl).document
+            val script = docPage.select("script:containsData(signedUrl)").firstOrNull()?.toString() ?: return
+            val signedUrl = Regex("""window\.signedUrl\s*=\s*"(.+?)"""").find(script)?.groupValues?.get(1)?.replace("\\/", "/") 
+                ?: return
+            
+            val jsonResponseText = app.get(signedUrl, referer = targetUrl).text
+            val jsonObject = tryParseJson<Map<String, Any>>(jsonResponseText) ?: return
+            val videoSource = jsonObject["video_source"] as? Map<String, String> ?: return
+            
+            val bestQualityKey = videoSource.keys.filter { it.toIntOrNull() != null }
+                .maxByOrNull { it.toInt() } ?: return
+            val videoUrl = videoSource[bestQualityKey] ?: return
+
+            if (videoUrl.isNotEmpty()) {
+                callback.invoke(
+                    newExtractorLink(
+                        "AdiDewasa",
+                        "AdiDewasa",
+                        videoUrl,
+                        ExtractorLinkType.M3U8
+                    ) {
+                        this.referer = baseUrl
+                    }
+                )
+                
+                // 5. SUBTITLES
+                val subJson = jsonObject["sub"] as? Map<String, Any>
+                val subs = subJson?.get(bestQualityKey) as? List<String>
+                subs?.forEach { subPath ->
+                    val subUrl = fixUrl(subPath, baseUrl)
+                    subtitleCallback.invoke(
+                        newSubtitleFile("English", subUrl)
+                    )
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
 }
