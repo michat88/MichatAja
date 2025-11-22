@@ -9,14 +9,100 @@ import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.nicehttp.RequestBodyTypes
-import com.lagradost.nicehttp.Requests
-import com.lagradost.nicehttp.Session
 import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.jsoup.Jsoup
 
 object Adicinemax21Extractor : Adicinemax21() {
+
+    // ================== ADIMOVIEBOX SOURCE (NEW) ==================
+    suspend fun invokeAdimoviebox(
+        title: String,
+        year: Int?,
+        season: Int?,
+        episode: Int?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        val searchUrl = "https://moviebox.ph/wefeed-h5-bff/web/subject/search"
+        val streamApi = "https://fmoviesunblocked.net"
+        
+        // 1. Cari Film/Serial berdasarkan judul
+        val searchBody = mapOf(
+            "keyword" to title,
+            "page" to 1,
+            "perPage" to 10,
+            "subjectType" to 0
+        ).toJson().toRequestBody(RequestBodyTypes.JSON.toMediaTypeOrNull())
+
+        val searchRes = app.post(searchUrl, requestBody = searchBody).text
+        
+        // Parsing manual sederhana untuk search results
+        val items = tryParseJson<AdimovieboxSearch>(searchRes)?.data?.items ?: return
+        
+        // 2. Filter hasil pencarian yang cocok (Judul & Tahun)
+        val matchedMedia = items.find { item ->
+            val itemYear = item.releaseDate?.split("-")?.firstOrNull()?.toIntOrNull()
+            // Logika pencocokan: Judul mirip ATAU (Judul mengandung judul asli & Tahun sama)
+            (item.title.equals(title, true)) || 
+            (item.title?.contains(title, true) == true && itemYear == year)
+        } ?: return
+
+        // 3. Request Link Stream
+        val subjectId = matchedMedia.subjectId ?: return
+        // Jika movie, se/ep = 0. Jika series, gunakan season/episode dari parameter
+        val se = if (season == null) 0 else season
+        val ep = if (episode == null) 0 else episode
+        
+        val playUrl = "$streamApi/wefeed-h5-bff/web/subject/play?subjectId=$subjectId&se=$se&ep=$ep"
+        val referer = "$streamApi/spa/videoPlayPage/movies/${matchedMedia.detailPath}?id=$subjectId&type=/movie/detail&lang=en"
+
+        val playRes = app.get(playUrl, referer = referer).text
+        val streams = tryParseJson<AdimovieboxStreams>(playRes)?.data?.streams ?: return
+
+        // 4. Ekstrak Link Video
+        streams.reversed().forEach { source ->
+             callback.invoke(
+                newExtractorLink(
+                    "Adimoviebox",
+                    "Adimoviebox", // Nama source yang akan muncul
+                    source.url ?: return@forEach,
+                    ExtractorLinkType.M3U8
+                ) {
+                    this.referer = "$streamApi/"
+                    this.quality = getQualityFromName(source.resolutions)
+                }
+            )
+        }
+
+        // 5. Ekstrak Subtitle (Bonus)
+        val id = streams.firstOrNull()?.id
+        val format = streams.firstOrNull()?.format
+        if (id != null) {
+            val subUrl = "$streamApi/wefeed-h5-bff/web/subject/caption?format=$format&id=$id&subjectId=$subjectId"
+            app.get(subUrl, referer = referer).parsedSafe<AdimovieboxCaptions>()?.data?.captions?.forEach { sub ->
+                subtitleCallback.invoke(
+                    newSubtitleFile(
+                        sub.lanName ?: "Unknown",
+                        sub.url ?: return@forEach
+                    )
+                )
+            }
+        }
+    }
+
+    // Data Classes Internal Khusus Adimoviebox (Agar tidak merusak Parser utama)
+    data class AdimovieboxSearch(val data: AdimovieboxData?)
+    data class AdimovieboxData(val items: List<AdimovieboxItem>?)
+    data class AdimovieboxItem(val subjectId: String?, val title: String?, val releaseDate: String?, val detailPath: String?)
+    data class AdimovieboxStreams(val data: AdimovieboxStreamData?)
+    data class AdimovieboxStreamData(val streams: List<AdimovieboxStreamItem>?)
+    data class AdimovieboxStreamItem(val id: String?, val format: String?, val url: String?, val resolutions: String?)
+    data class AdimovieboxCaptions(val data: AdimovieboxCaptionData?)
+    data class AdimovieboxCaptionData(val captions: List<AdimovieboxCaptionItem>?)
+    data class AdimovieboxCaptionItem(val lanName: String?, val url: String?)
+    // ================== END ADIMOVIEBOX SOURCE ==================
 
     suspend fun invokeGomovies(
         title: String? = null,
