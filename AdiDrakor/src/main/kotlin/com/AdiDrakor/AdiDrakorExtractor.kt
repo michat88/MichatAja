@@ -15,10 +15,11 @@ import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.jsoup.Jsoup
+import org.json.JSONObject
 
 object AdiDrakorExtractor : AdiDrakor() {
 
-    // ================== ADIMOVIEBOX SOURCE (ADDED) ==================
+    // ================== ADIMOVIEBOX SOURCE ==================
     suspend fun invokeAdimoviebox(
         title: String,
         year: Int?,
@@ -30,7 +31,6 @@ object AdiDrakorExtractor : AdiDrakor() {
         val searchUrl = "https://moviebox.ph/wefeed-h5-bff/web/subject/search"
         val streamApi = "https://fmoviesunblocked.net"
         
-        // 1. Cari Film/Serial berdasarkan judul
         val searchBody = mapOf(
             "keyword" to title,
             "page" to 1,
@@ -41,43 +41,36 @@ object AdiDrakorExtractor : AdiDrakor() {
         val searchRes = app.post(searchUrl, requestBody = searchBody).text
         val items = tryParseJson<AdimovieboxSearch>(searchRes)?.data?.items ?: return
         
-        // 2. Filter hasil pencarian
         val matchedMedia = items.find { item ->
             val itemYear = item.releaseDate?.split("-")?.firstOrNull()?.toIntOrNull()
             (item.title.equals(title, true)) || 
             (item.title?.contains(title, true) == true && itemYear == year)
         } ?: return
 
-        // 3. Request Link Stream
         val subjectId = matchedMedia.subjectId ?: return
         val se = if (season == null) 0 else season
         val ep = if (episode == null) 0 else episode
         
         val playUrl = "$streamApi/wefeed-h5-bff/web/subject/play?subjectId=$subjectId&se=$se&ep=$ep"
-        // Referer spesifik yang benar (PENTING untuk menghindari error 3002)
         val validReferer = "$streamApi/spa/videoPlayPage/movies/${matchedMedia.detailPath}?id=$subjectId&type=/movie/detail&lang=en"
 
         val playRes = app.get(playUrl, referer = validReferer).text
         val streams = tryParseJson<AdimovieboxStreams>(playRes)?.data?.streams ?: return
 
-        // 4. Ekstrak Link Video
         streams.reversed().forEach { source ->
              callback.invoke(
                 newExtractorLink(
                     "Adimoviebox",
                     "Adimoviebox",
                     source.url ?: return@forEach,
-                    // Gunakan INFER_TYPE agar otomatis deteksi MP4/M3U8
                     INFER_TYPE 
                 ) {
-                    // Gunakan referer lengkap, bukan root domain
                     this.referer = validReferer
                     this.quality = getQualityFromName(source.resolutions)
                 }
             )
         }
 
-        // 5. Ekstrak Subtitle
         val id = streams.firstOrNull()?.id
         val format = streams.firstOrNull()?.format
         if (id != null) {
@@ -93,7 +86,6 @@ object AdiDrakorExtractor : AdiDrakor() {
         }
     }
 
-    // Data Classes Internal Khusus Adimoviebox
     data class AdimovieboxSearch(val data: AdimovieboxData?)
     data class AdimovieboxData(val items: List<AdimovieboxItem>?)
     data class AdimovieboxItem(val subjectId: String?, val title: String?, val releaseDate: String?, val detailPath: String?)
@@ -103,7 +95,94 @@ object AdiDrakorExtractor : AdiDrakor() {
     data class AdimovieboxCaptions(val data: AdimovieboxCaptionData?)
     data class AdimovieboxCaptionData(val captions: List<AdimovieboxCaptionItem>?)
     data class AdimovieboxCaptionItem(val lanName: String?, val url: String?)
-    // ================== END ADIMOVIEBOX SOURCE ==================
+    // ================== END ADIMOVIEBOX ==================
+
+
+    // ================== ADIDEWASA (Dramafull) SOURCE (ADDED) ==================
+    suspend fun invokeAdiDewasa(
+        title: String,
+        season: Int?,
+        episode: Int?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        val baseUrl = "https://dramafull.cc"
+        
+        // 1. Search
+        val searchUrl = "$baseUrl/api/live-search/$title"
+        val searchRes = app.get(searchUrl).parsedSafe<AdiDewasaSearchResponse>()?.data ?: return
+        
+        // Cari yang paling mirip
+        val match = searchRes.find { it.title.equals(title, true) } 
+            ?: searchRes.firstOrNull { it.title?.contains(title, true) == true } 
+            ?: return
+
+        val slug = match.slug ?: return
+        var targetUrl = "$baseUrl/film/$slug"
+
+        // 2. Handle Episode (Jika Series)
+        if (season != null && episode != null) {
+            val doc = app.get(targetUrl).document
+            // Cari link episode tertentu
+            val epLink = doc.select("div.episode-item a, .episode-list a").find { 
+                val txt = it.text()
+                // Regex cari angka episode
+                val epNum = Regex("""Episode\s*(\d+)""", RegexOption.IGNORE_CASE).find(txt)?.groupValues?.get(1)?.toIntOrNull()
+                    ?: Regex("""^(\d+)$""").find(txt.trim())?.groupValues?.get(1)?.toIntOrNull()
+                epNum == episode
+            }?.attr("href")
+
+            if (epLink == null) return // Episode tidak ketemu
+            targetUrl = if(epLink.startsWith("http")) epLink else "$baseUrl$epLink"
+        }
+
+        // 3. Extract Link Video
+        val pageDoc = app.get(targetUrl).document
+        val script = pageDoc.select("script:containsData(signedUrl)").firstOrNull()?.toString() ?: return
+        val signedUrl = Regex("""window\.signedUrl\s*=\s*"(.+?)"""").find(script)?.groupValues?.get(1)?.replace("\\/", "/") ?: return
+
+        val res = app.get(signedUrl).text
+        val resJson = JSONObject(res)
+        val videoSource = resJson.optJSONObject("video_source") ?: return
+
+        // Loop kualitas
+        val qualities = videoSource.keys().asSequence().toList()
+            .sortedByDescending { key -> Regex("(\\d+)").find(key)?.groupValues?.get(1)?.toIntOrNull() ?: 0 }
+
+        qualities.forEach { qualityKey ->
+            val videoUrl = videoSource.optString(qualityKey)
+            if (videoUrl.isNotEmpty()) {
+                callback.invoke(
+                    newExtractorLink(
+                        "AdiDewasa",
+                        "AdiDewasa $qualityKey",
+                        videoUrl,
+                        referer = baseUrl,
+                        quality = getQualityFromName(qualityKey)
+                    )
+                )
+            }
+        }
+
+        // Handle Subtitle
+        val firstKey = qualities.firstOrNull()
+        if (firstKey != null) {
+            val subJson = resJson.optJSONObject("sub")
+            subJson?.optJSONArray(firstKey)?.let { array ->
+                for (i in 0 until array.length()) {
+                    val subUrlRaw = array.getString(i)
+                    val subUrl = if (subUrlRaw.startsWith("http")) subUrlRaw else baseUrl + subUrlRaw
+                    subtitleCallback.invoke(newSubtitleFile("English", subUrl))
+                }
+            }
+        }
+    }
+
+    // Data class internal untuk AdiDewasa
+    data class AdiDewasaSearchResponse(val data: List<AdiDewasaItem>?)
+    data class AdiDewasaItem(val title: String?, val slug: String?)
+    // ================== END ADIDEWASA ==================
+
 
     suspend fun invokeGomovies(
         title: String? = null,
