@@ -16,7 +16,7 @@ import org.jsoup.Jsoup
 
 object Adicinemax21Extractor : Adicinemax21() {
 
-    // ================== ADIMOVIEBOX SOURCE (NEW) ==================
+    // ================== ADIMOVIEBOX SOURCE (FIXED) ==================
     suspend fun invokeAdimoviebox(
         title: String,
         year: Int?,
@@ -37,28 +37,25 @@ object Adicinemax21Extractor : Adicinemax21() {
         ).toJson().toRequestBody(RequestBodyTypes.JSON.toMediaTypeOrNull())
 
         val searchRes = app.post(searchUrl, requestBody = searchBody).text
-        
-        // Parsing manual sederhana untuk search results
         val items = tryParseJson<AdimovieboxSearch>(searchRes)?.data?.items ?: return
         
-        // 2. Filter hasil pencarian yang cocok (Judul & Tahun)
+        // 2. Filter hasil pencarian
         val matchedMedia = items.find { item ->
             val itemYear = item.releaseDate?.split("-")?.firstOrNull()?.toIntOrNull()
-            // Logika pencocokan: Judul mirip ATAU (Judul mengandung judul asli & Tahun sama)
             (item.title.equals(title, true)) || 
             (item.title?.contains(title, true) == true && itemYear == year)
         } ?: return
 
         // 3. Request Link Stream
         val subjectId = matchedMedia.subjectId ?: return
-        // Jika movie, se/ep = 0. Jika series, gunakan season/episode dari parameter
         val se = if (season == null) 0 else season
         val ep = if (episode == null) 0 else episode
         
         val playUrl = "$streamApi/wefeed-h5-bff/web/subject/play?subjectId=$subjectId&se=$se&ep=$ep"
-        val referer = "$streamApi/spa/videoPlayPage/movies/${matchedMedia.detailPath}?id=$subjectId&type=/movie/detail&lang=en"
+        // Referer spesifik yang benar (PENTING untuk menghindari error 3002)
+        val validReferer = "$streamApi/spa/videoPlayPage/movies/${matchedMedia.detailPath}?id=$subjectId&type=/movie/detail&lang=en"
 
-        val playRes = app.get(playUrl, referer = referer).text
+        val playRes = app.get(playUrl, referer = validReferer).text
         val streams = tryParseJson<AdimovieboxStreams>(playRes)?.data?.streams ?: return
 
         // 4. Ekstrak Link Video
@@ -66,22 +63,24 @@ object Adicinemax21Extractor : Adicinemax21() {
              callback.invoke(
                 newExtractorLink(
                     "Adimoviebox",
-                    "Adimoviebox", // Nama source yang akan muncul
+                    "Adimoviebox",
                     source.url ?: return@forEach,
-                    ExtractorLinkType.M3U8
+                    // FIX: Gunakan INFER_TYPE agar otomatis deteksi MP4/M3U8
+                    INFER_TYPE 
                 ) {
-                    this.referer = "$streamApi/"
+                    // FIX: Gunakan referer lengkap, bukan root domain
+                    this.referer = validReferer
                     this.quality = getQualityFromName(source.resolutions)
                 }
             )
         }
 
-        // 5. Ekstrak Subtitle (Bonus)
+        // 5. Ekstrak Subtitle
         val id = streams.firstOrNull()?.id
         val format = streams.firstOrNull()?.format
         if (id != null) {
             val subUrl = "$streamApi/wefeed-h5-bff/web/subject/caption?format=$format&id=$id&subjectId=$subjectId"
-            app.get(subUrl, referer = referer).parsedSafe<AdimovieboxCaptions>()?.data?.captions?.forEach { sub ->
+            app.get(subUrl, referer = validReferer).parsedSafe<AdimovieboxCaptions>()?.data?.captions?.forEach { sub ->
                 subtitleCallback.invoke(
                     newSubtitleFile(
                         sub.lanName ?: "Unknown",
@@ -92,7 +91,6 @@ object Adicinemax21Extractor : Adicinemax21() {
         }
     }
 
-    // Data Classes Internal Khusus Adimoviebox (Agar tidak merusak Parser utama)
     data class AdimovieboxSearch(val data: AdimovieboxData?)
     data class AdimovieboxData(val items: List<AdimovieboxItem>?)
     data class AdimovieboxItem(val subjectId: String?, val title: String?, val releaseDate: String?, val detailPath: String?)
