@@ -3,7 +3,7 @@ package com.AdiDewasa
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.INFER_TYPE
-import com.lagradost.cloudstream3.utils.newExtractorLink // PERBAIKAN: Ditambahkan
+import com.lagradost.cloudstream3.utils.newExtractorLink
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
@@ -57,7 +57,6 @@ class AdiDewasa : MainAPI() {
             }
         } ?: emptyList()
 
-        // PERBAIKAN DI SINI: List harus dibungkus dalam HomePageList
         return newHomePageResponse(HomePageList(request.name, list), hasNext = response?.nextPageUrl != null)
     }
 
@@ -108,11 +107,11 @@ class AdiDewasa : MainAPI() {
     }
 
     // 3. MEMUAT LINK (HYBRID AGGREGATOR)
+    @Suppress("UNCHECKED_CAST") // PERBAIKAN: Menghilangkan warning cast JSON
     override suspend fun loadLinks(data: String, isCasting: Boolean, subtitleCallback: (SubtitleFile) -> Unit, callback: (ExtractorLink) -> Unit): Boolean {
         val args = parseJson<LinkData>(data)
         
         // BRIDGE: Cari ID TMDB di background agar extractor lain bisa jalan
-        // (Dramafull tidak punya ID TMDB, jadi kita cari berdasarkan judul & tahun)
         val tmdbId = if(args.year != null) AdiDewasaHelper.fetchTmdbId(args.title, args.year, args.episode == null) else null
 
         runAllAsync(
@@ -126,7 +125,7 @@ class AdiDewasa : MainAPI() {
                         val json = app.get(signedUrl, referer = args.url, headers = AdiDewasaHelper.headers).text
                         val videoSource = tryParseJson<Map<String, Any>>(json)?.get("video_source") as? Map<String, String>
                         videoSource?.forEach { (q, url) ->
-                            // PERBAIKAN: newExtractorLink sudah di-import
+                            // INFER_TYPE tanpa header referer untuk menghindari error 3002
                             callback(newExtractorLink(name, "AdiDewasa ($q)", url, INFER_TYPE))
                         }
                         // Subtitles
@@ -134,7 +133,8 @@ class AdiDewasa : MainAPI() {
                         if (bestQ != null) {
                              val subJson = tryParseJson<Map<String, Any>>(json)?.get("sub") as? Map<String, Any>
                              (subJson?.get(bestQ) as? List<String>)?.forEach { 
-                                 subtitleCallback(SubtitleFile("English", if(it.startsWith("http")) it else "$mainUrl$it"))
+                                 // PERBAIKAN: Menggunakan newSubtitleFile (bukan SubtitleFile constructor)
+                                 subtitleCallback(newSubtitleFile("English", if(it.startsWith("http")) it else "$mainUrl$it"))
                              }
                         }
                     }
