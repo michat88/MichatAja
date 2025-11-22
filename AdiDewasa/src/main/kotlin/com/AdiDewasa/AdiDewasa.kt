@@ -16,37 +16,61 @@ class AdiDewasa : MainAPI() {
     override val hasDownloadSupport = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.AsianDrama)
 
-    // UPDATE: Menambahkan 6 Kategori Spesifik
-    // Type: 2 = Movies, 1 = TV Series, -1 = Semua
-    // Sort: 1 = Latest, 5 = Most Watched, 6 = Top Rated (asumsi umum filter)
+    // MODIFIKASI: 20 Kategori Film Dewasa
+    // Format Data: "Type:Sort:Adult:Country"
+    // Type: 2=Movie, 1=TV, -1=All
+    // Sort: 1=Latest, 2=Year, 3=A-Z, 5=Most Watched, 6=Top Rated
+    // Country (Eksperimental): 1=Korea, 2=China, 3=Japan, 4=Taiwan, 6=Thailand, -1=All
     override val mainPage: List<MainPageData>
         get() {
             return listOf(
-                MainPageData("Adult Movies - Latest", "2:1:adult"),         // 1. Film Terbaru
-                MainPageData("Adult Movies - Most Watched", "2:5:adult"),   // 2. Film Populer
-                MainPageData("Adult Movies - Top Rated", "2:6:adult"),      // 3. Film Rating Tinggi
-                MainPageData("Adult TV Shows - Latest", "1:1:adult"),       // 4. Serial TV Terbaru
-                MainPageData("Adult TV Shows - Most Watched", "1:5:adult"), // 5. Serial TV Populer
-                MainPageData("Adult Recently Added (All)", "-1:1:adult"),   // 6. Semua Terbaru
+                // --- Bagian 1: Film (Movies) ---
+                MainPageData("Adult Movies - Baru Rilis", "2:1:adult:-1"),
+                MainPageData("Adult Movies - Terpopuler", "2:5:adult:-1"),
+                MainPageData("Adult Movies - Rating Tertinggi", "2:6:adult:-1"),
+                MainPageData("Adult Movies - Sesuai Abjad A-Z", "2:3:adult:-1"),
+                MainPageData("Adult Movies - Berdasarkan Tahun", "2:2:adult:-1"),
+
+                // --- Bagian 2: Serial TV (Shows) ---
+                MainPageData("Adult TV Shows - Episode Baru", "1:1:adult:-1"),
+                MainPageData("Adult TV Shows - Terpopuler", "1:5:adult:-1"),
+                MainPageData("Adult TV Shows - Rating Tertinggi", "1:6:adult:-1"),
+                MainPageData("Adult TV Shows - Sesuai Abjad A-Z", "1:3:adult:-1"),
+                MainPageData("Adult TV Shows - Berdasarkan Tahun", "1:2:adult:-1"),
+
+                // --- Bagian 3: Berdasarkan Negara (Country Specific) ---
+                // ID Negara ini adalah estimasi umum untuk script dramafull
+                MainPageData("Japanese Adult Content", "-1:1:adult:3"), // Jepang
+                MainPageData("Korean Adult Content", "-1:1:adult:1"),   // Korea
+                MainPageData("Chinese Adult Content", "-1:1:adult:2"),  // China
+                MainPageData("Taiwanese Adult Content", "-1:1:adult:4"), // Taiwan
+                MainPageData("Thailand Adult Content", "-1:1:adult:6"), // Thailand
+
+                // --- Bagian 4: Campuran & Koleksi Lain (All Types) ---
+                MainPageData("All Adult - Trending Saat Ini", "-1:5:adult:-1"),
+                MainPageData("All Adult - Paling Disukai", "-1:6:adult:-1"),
+                MainPageData("All Adult - Update Terbaru", "-1:1:adult:-1"),
+                MainPageData("All Adult - Koleksi Lengkap A-Z", "-1:3:adult:-1"),
+                MainPageData("All Adult - Klasik & Retro", "-1:2:adult:-1") // Sort by Year biasanya descending, tapi bisa jadi variasi
             )
         }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         try {
-            val (type, sort, adultFlag) = request.data.split(":").let {
-                val t = it.getOrNull(0) ?: "-1"
-                val s = it.getOrNull(1)?.toIntOrNull() ?: 1
-                val a = it.getOrNull(2) ?: "normal"
-                Triple(t, s, a)
-            }
+            // MODIFIKASI: Parsing 4 parameter sekarang (Type, Sort, Adult, Country)
+            val dataParts = request.data.split(":")
+            val type = dataParts.getOrNull(0) ?: "-1"
+            val sort = dataParts.getOrNull(1)?.toIntOrNull() ?: 1
+            val adultFlag = dataParts.getOrNull(2) ?: "normal"
+            val country = dataParts.getOrNull(3)?.toIntOrNull() ?: -1 // Default ke -1 (Semua Negara)
 
             val isAdultSection = adultFlag == "adult"
 
-            // TETAP: Memaksa "adult": true agar server selalu mengirim konten tanpa filter
+            // JSON Payload dinamis termasuk Country
             val jsonPayload = """{
                 "page": $page,
                 "type": "$type",
-                "country": -1,
+                "country": $country,
                 "sort": $sort,
                 "adult": true,
                 "adultOnly": $isAdultSection,
@@ -84,9 +108,6 @@ class AdiDewasa : MainAPI() {
 
     private fun MediaItem.toSearchResult(): SearchResponse? {
         try {
-            // TETAP: Filter penyembunyi konten dihapus total
-
-            // Use title or name, whichever is available
             val itemTitle = this.title ?: this.name ?: "Unknown Title"
             val itemSlug = this.slug ?: return null
             val itemImage = this.image ?: this.poster ?: ""
@@ -132,7 +153,6 @@ class AdiDewasa : MainAPI() {
             
             val videoHref = doc.selectFirst("div.last-episode a, .watch-button a")?.attr("href") ?: url
 
-            // Recommendations
             val recs = doc.select("div.film_list-wrap div.flw-item, .recommendations .item").mapNotNull {
                 val title = it.selectFirst("img")?.attr("alt") ?: it.selectFirst("h3, .title")?.text() ?: ""
                 val image = it.selectFirst("img")?.attr("data-src") ?: it.selectFirst("img")?.attr("src") ?: ""
@@ -222,7 +242,6 @@ class AdiDewasa : MainAPI() {
                     )
                 )
                 
-                // Handle subtitles
                 val subJson = resJson.optJSONObject("sub")
                 subJson?.optJSONArray(bestQualityKey)?.let { array ->
                     for (i in 0 until array.length()) {
