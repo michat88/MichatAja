@@ -19,9 +19,6 @@ import java.net.URLEncoder
 
 object AdiDrakorExtractor : AdiDrakor() {
 
-    // ... (Kode Adimoviebox, Idlix, dll tetap sama, saya persingkat untuk fokus ke AdiDewasa) ...
-    // Karena Anda minta FULL, saya akan tulis ulang semua fungsi lama + AdiDewasa yang baru.
-
     // ================== ADIMOVIEBOX SOURCE ==================
     suspend fun invokeAdimoviebox(
         title: String,
@@ -940,7 +937,7 @@ object AdiDrakorExtractor : AdiDrakor() {
 
     }
 
-    // ================== ADIDEWASA / DRAMAFULL (USING UTILS HELPER) ==================
+    // ================== ADIDEWASA / DRAMAFULL (FINAL FIX + HEADER BYPASS) ==================
     @Suppress("UNCHECKED_CAST") 
     suspend fun invokeAdiDewasa(
         title: String,
@@ -952,20 +949,19 @@ object AdiDrakorExtractor : AdiDrakor() {
     ) {
         val baseUrl = "https://dramafull.cc"
         
-        // 1. GUNAKAN HELPER DARI UTILS UNTUK MEMBERSIHKAN JUDUL
+        // 1. PEMBERSIHAN JUDUL (Via Helper)
         val cleanQuery = AdiDewasaHelper.normalizeQuery(title)
         val encodedQuery = URLEncoder.encode(cleanQuery, "UTF-8").replace("+", "%20")
         val searchUrl = "$baseUrl/api/live-search/$encodedQuery"
 
         try {
-            // Gunakan Header dari Utils
             val searchRes = app.get(searchUrl, headers = AdiDewasaHelper.headers).parsedSafe<AdiDewasaSearchResponse>()
             
-            // 2. GUNAKAN HELPER DARI UTILS UNTUK PENCOCOKAN JUDUL (FUZZY MATCH)
+            // 2. PENCOCOKAN JUDUL (Via Helper)
             val matchedItem = searchRes?.data?.find { item ->
                 val itemTitle = item.title ?: item.name ?: ""
                 AdiDewasaHelper.isFuzzyMatch(title, itemTitle)
-            } ?: searchRes?.data?.firstOrNull() // Fallback
+            } ?: searchRes?.data?.firstOrNull()
 
             if (matchedItem == null) return 
 
@@ -976,7 +972,7 @@ object AdiDrakorExtractor : AdiDrakor() {
             val doc = app.get(targetUrl, headers = AdiDewasaHelper.headers).document
 
             if (season != null && episode != null) {
-                // -- SERIAL TV --
+                // SERIAL TV
                 val episodeHref = doc.select("div.episode-item a, .episode-list a").find { 
                     val text = it.text().trim()
                     val epNum = Regex("""(\d+)""").find(text)?.groupValues?.get(1)?.toIntOrNull()
@@ -986,7 +982,7 @@ object AdiDrakorExtractor : AdiDrakor() {
                 if (episodeHref == null) return
                 targetUrl = fixUrl(episodeHref, baseUrl)
             } else {
-                // -- FILM (MOVIE) --
+                // FILM MOVIE
                 val selectors = listOf(
                     "a.btn-watch", 
                     "a.watch-now", 
@@ -1009,7 +1005,7 @@ object AdiDrakorExtractor : AdiDrakor() {
                 if (foundUrl != null) targetUrl = foundUrl
             }
 
-            // 5. EKSTRAKSI VIDEO
+            // 4. EKSTRAKSI VIDEO & BYPASS 3002
             val docPage = app.get(targetUrl, headers = AdiDewasaHelper.headers).document
             val allScripts = docPage.select("script").joinToString(" ") { it.data() }
             
@@ -1027,15 +1023,18 @@ object AdiDrakorExtractor : AdiDrakor() {
                             "AdiDewasa",
                             "AdiDewasa ($quality)",
                             url,
-                            ExtractorLinkType.M3U8
+                            INFER_TYPE // PENTING: Ganti M3U8 ke INFER_TYPE untuk cegah Error 3002
                         ) {
-                            this.referer = baseUrl
+                            // PENTING: Header Referer ke halaman FILM, bukan HOME
+                            this.referer = targetUrl 
+                            this.headers = AdiDewasaHelper.headers.toMutableMap().apply {
+                                put("Referer", targetUrl) // Override Referer
+                            }
                         }
                     )
                 }
             }
              
-             // SUBTITLE
              val bestQualityKey = videoSource.keys.maxByOrNull { it.toIntOrNull() ?: 0 } ?: return
              val subJson = jsonObject["sub"] as? Map<String, Any>
              val subs = subJson?.get(bestQualityKey) as? List<String>
