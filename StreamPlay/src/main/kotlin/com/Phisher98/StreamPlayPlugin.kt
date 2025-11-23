@@ -16,10 +16,10 @@ import com.lagradost.cloudstream3.extractors.StreamTape
 import com.lagradost.cloudstream3.extractors.StreamWishExtractor
 import com.lagradost.cloudstream3.extractors.Streamlare
 import com.lagradost.cloudstream3.extractors.VidHidePro6
-import com.lagradost.cloudstream3.extractors.VidSrcExtractor
+// HAPUS BARIS INI: import com.lagradost.cloudstream3.extractors.VidSrcExtractor
 import com.lagradost.cloudstream3.extractors.VidStack
 import com.lagradost.cloudstream3.extractors.Vidmolyme
-import com.lagradost.cloudstream3.extractors.Vidplay
+// HAPUS BARIS INI: import com.lagradost.cloudstream3.extractors.Vidplay
 import com.lagradost.cloudstream3.extractors.Voe
 import com.lagradost.cloudstream3.plugins.Plugin
 import androidx.core.content.edit
@@ -68,7 +68,7 @@ class StreamPlayPlugin: Plugin() {
         registerExtractorAPI(Mwish())
         registerExtractorAPI(TravelR())
         registerExtractorAPI(Playm4u())
-        registerExtractorAPI(Vidplay())
+        // HAPUS BARIS INI: registerExtractorAPI(Vidplay())
         registerExtractorAPI(FileMoon())
         registerExtractorAPI(VCloud())
         registerExtractorAPI(Kwik())
@@ -116,7 +116,7 @@ class StreamPlayPlugin: Plugin() {
         registerExtractorAPI(GDFlix1())
         registerExtractorAPI(GDFlix2())
         registerExtractorAPI(furher())
-        registerExtractorAPI(VidSrcExtractor())
+        // HAPUS BARIS INI: registerExtractorAPI(VidSrcExtractor())
         registerExtractorAPI(Servertwo())
         registerExtractorAPI(MultimoviesAIO())
         registerExtractorAPI(HubCloud())
