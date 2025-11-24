@@ -9,10 +9,13 @@ import com.lagradost.nicehttp.RequestBodyTypes
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
 
-// 1. OBJECT ADIHYBRID (KUMPULAN EXTRACTOR DARI ADIDRAKOR)
-object AdiHybrid {
+// PERBAIKAN: Object AdiHybrid mewarisi MainAPI
+object AdiHybrid : MainAPI() {
+    override var mainUrl = "https://dramafull.cc" 
+    override var name = "AdiHybrid"
+    override val supportedTypes = setOf(TvType.Movie)
 
-    // ================== ADIMOVIEBOX SOURCE ==================
+    // ================== ADIMOVIEBOX SOURCE (FIXED YEAR MATCHING) ==================
     suspend fun invokeAdimoviebox(
         title: String,
         year: Int?,
@@ -35,11 +38,23 @@ object AdiHybrid {
             val searchRes = app.post(searchUrl, requestBody = searchBody).text
             val items = tryParseJson<AdimovieboxSearch>(searchRes)?.data?.items ?: return
             
+            // LOGIKA BARU: WAJIB CEK TAHUN
             val matchedMedia = items.find { item ->
                 val itemYear = item.releaseDate?.split("-")?.firstOrNull()?.toIntOrNull()
-                (item.title.equals(title, true)) || 
-                (item.title?.contains(title, true) == true && itemYear == year)
-            } ?: return
+                
+                // 1. Judul Wajib Sama Persis
+                val isTitleMatch = item.title.equals(title, true)
+                
+                // 2. Tahun Wajib Cocok (Toleransi selisih 1 tahun)
+                // Jika input tahun (year) null, kita terpaksa terima (return true)
+                val isYearMatch = if (year != null && itemYear != null) {
+                    kotlin.math.abs(itemYear - year) <= 1 
+                } else {
+                    true 
+                }
+
+                isTitleMatch && isYearMatch
+            } ?: return // Kalau tidak cocok judul & tahun, stop.
 
             val subjectId = matchedMedia.subjectId ?: return
             val se = season ?: 0
@@ -119,7 +134,6 @@ object AdiHybrid {
                 
                 val sourceUrl = tryParseJson<ResponseHash>(json)?.embed_url ?: return@forEach
                 
-                // INI YANG SEBELUMNYA ERROR: SEKARANG KELAS AdiJenius SUDAH ADA DI BAWAH
                 if (sourceUrl.contains("jeniusplay")) {
                     AdiJenius().getUrl(sourceUrl, "$idlixAPI/", subtitleCallback, callback)
                 } else {
@@ -189,7 +203,7 @@ object AdiHybrid {
     }
 }
 
-// 2. CLASS ADIJENIUS (DIBUTUHKAN OLEH PLUGIN DAN IDLIX)
+// ================== CLASS ADIJENIUS ==================
 open class AdiJenius : ExtractorApi() {
     override val name = "AdiJenius"
     override val mainUrl = "https://jeniusplay.com"
