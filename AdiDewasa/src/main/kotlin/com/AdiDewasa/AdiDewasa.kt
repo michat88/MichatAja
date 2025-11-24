@@ -2,10 +2,11 @@ package com.AdiDewasa
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.AppUtils
-import com.lagradost.cloudstream3.utils.AppUtils.toJson // ERROR FIX: Import Extension Function
+import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.newExtractorLink
-import com.lagradost.cloudstream3.SubtitleFile // ERROR FIX: Import Class langsung
+import com.lagradost.cloudstream3.utils.INFER_TYPE
+import com.lagradost.cloudstream3.SubtitleFile
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
@@ -19,7 +20,7 @@ class AdiDewasa : MainAPI() {
     override val hasDownloadSupport = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.AsianDrama)
 
-    // --- MAIN PAGE CONFIGURATION ---
+    // --- KONFIGURASI HALAMAN UTAMA ---
     override val mainPage: List<MainPageData>
         get() {
             return listOf(
@@ -99,7 +100,7 @@ class AdiDewasa : MainAPI() {
         }
     }
 
-    // --- LOAD FUNCTION (MODIFIED FOR HYBRID DATA) ---
+    // --- FUNGSI LOAD (HYBRID DATA PACKING) ---
     override suspend fun load(url: String): LoadResponse {
         try {
             val doc = app.get(url).document
@@ -133,10 +134,9 @@ class AdiDewasa : MainAPI() {
                         ?: Regex("""(\d+)""").find(episodeText)?.groupValues?.get(1)?.toIntOrNull()
 
                     if (episodeHref.isNotEmpty()) {
-                        // ERROR FIX: Gunakan .toJson() pada objek, bukan AppUtils.toJson(objek)
+                        // Packing Data JSON
                         val dataJson = AdiLinkInfo(episodeHref, title, year, episodeNum, 1).toJson()
                         
-                        // ERROR FIX: Gunakan .apply {} untuk menghindari Type Mismatch (expected Boolean)
                         newEpisode(dataJson).apply {
                             this.name = "Episode ${episodeNum ?: episodeText}"
                             this.episode = episodeNum
@@ -151,7 +151,7 @@ class AdiDewasa : MainAPI() {
                     this.recommendations = recs
                 }
             } else {
-                // ERROR FIX: Gunakan .toJson()
+                // Packing Data JSON
                 val dataJson = AdiLinkInfo(videoHref, title, year).toJson()
                 
                 return newMovieLoadResponse(title, url, TvType.Movie, dataJson) {
@@ -168,7 +168,7 @@ class AdiDewasa : MainAPI() {
         }
     }
 
-    // --- LOAD LINKS (HYBRID: TMDB + WYZIE + ORIGINAL) ---
+    // --- LOAD LINKS (FIXED: MANIFEST ERROR & HYBRID) ---
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -180,7 +180,6 @@ class AdiDewasa : MainAPI() {
         val info = try {
             AppUtils.parseJson<AdiLinkInfo>(data)
         } catch (e: Exception) {
-            // Fallback untuk kompatibilitas lama
             AdiLinkInfo(data, "", null)
         }
         val targetUrl = info.url
@@ -191,7 +190,6 @@ class AdiDewasa : MainAPI() {
             val tmdbId = getTmdbId(info.title, info.year, isMovie)
             
             if (tmdbId != null) {
-                // Panggil Wyzie Subtitle
                 val wyzieUrl = if (isMovie) 
                     "https://sub.wyzie.ru/search?id=$tmdbId"
                 else 
@@ -202,7 +200,6 @@ class AdiDewasa : MainAPI() {
                     val jsonArr = org.json.JSONArray(res)
                     for (i in 0 until jsonArr.length()) {
                         val item = jsonArr.getJSONObject(i)
-                        // ERROR FIX: Gunakan SubtitleFile langsung (ganti newSubtitleFile)
                         subtitleCallback(
                             SubtitleFile(item.getString("display"), item.getString("url"))
                         )
@@ -211,7 +208,7 @@ class AdiDewasa : MainAPI() {
             }
         }
 
-        // 3. ORIGINAL LOGIC: Ambil Video dari Dramafull
+        // 3. ORIGINAL LOGIC: Ambil Video dari Dramafull (FIXED)
         try {
             val doc = app.get(targetUrl).document
             val script = doc.select("script:containsData(signedUrl)").firstOrNull()?.toString() ?: return false
@@ -234,8 +231,13 @@ class AdiDewasa : MainAPI() {
                         name,
                         name,
                         bestQualityUrl,
-                        com.lagradost.cloudstream3.utils.ExtractorLinkType.M3U8
-                    )
+                        INFER_TYPE // PERBAIKAN: Gunakan INFER agar otomatis deteksi tipe
+                    ) {
+                        this.referer = targetUrl // PERBAIKAN: Wajib Referer agar tidak error 3002
+                        this.headers = mapOf(
+                            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+                        )
+                    }
                 )
                 
                 // Subtitle bawaan Dramafull (Backup)
@@ -243,7 +245,6 @@ class AdiDewasa : MainAPI() {
                 subJson?.optJSONArray(bestQualityKey)?.let { array ->
                     for (i in 0 until array.length()) {
                         val subUrl = array.getString(i)
-                        // ERROR FIX: Gunakan SubtitleFile langsung
                         subtitleCallback(SubtitleFile("English (Original)", mainUrl + subUrl))
                     }
                 }
@@ -256,7 +257,7 @@ class AdiDewasa : MainAPI() {
         return false
     }
 
-    // --- HELPER FUNCTIONS FOR HYBRID SYSTEM ---
+    // --- HELPER FUNCTIONS ---
 
     data class AdiLinkInfo(
         val url: String,
@@ -271,18 +272,16 @@ class AdiDewasa : MainAPI() {
 
     private suspend fun getTmdbId(title: String, year: Int?, isMovie: Boolean): Int? {
         try {
-            val apiKey = "b030404650f279792a8d3287232358e3" // Cloudstream Public Key
+            val apiKey = "b030404650f279792a8d3287232358e3"
             val type = if (isMovie) "movie" else "tv"
             val q = URLEncoder.encode(title, "UTF-8")
             
-            // Prioritas 1: Cari dengan Tahun
             if (year != null) {
                 val url = "https://api.themoviedb.org/3/search/$type?api_key=$apiKey&query=$q&year=$year"
                 val res = app.get(url).parsedSafe<TmdbSearch>()?.results?.firstOrNull()?.id
                 if (res != null) return res
             }
             
-            // Prioritas 2: Cari tanpa Tahun
             val urlNoYear = "https://api.themoviedb.org/3/search/$type?api_key=$apiKey&query=$q"
             return app.get(urlNoYear).parsedSafe<TmdbSearch>()?.results?.firstOrNull()?.id
         } catch (e: Exception) {
