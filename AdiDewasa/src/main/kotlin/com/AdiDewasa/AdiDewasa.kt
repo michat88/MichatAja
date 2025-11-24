@@ -2,9 +2,10 @@ package com.AdiDewasa
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.AppUtils
+import com.lagradost.cloudstream3.utils.AppUtils.toJson // ERROR FIX: Import Extension Function
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.newExtractorLink
-import com.lagradost.cloudstream3.utils.newSubtitleFile
+import com.lagradost.cloudstream3.SubtitleFile // ERROR FIX: Import Class langsung
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
@@ -132,10 +133,11 @@ class AdiDewasa : MainAPI() {
                         ?: Regex("""(\d+)""").find(episodeText)?.groupValues?.get(1)?.toIntOrNull()
 
                     if (episodeHref.isNotEmpty()) {
-                        // HYBRID: Kirim JSON data lengkap
-                        val dataJson = AppUtils.toJson(AdiLinkInfo(episodeHref, title, year, episodeNum, 1))
+                        // ERROR FIX: Gunakan .toJson() pada objek, bukan AppUtils.toJson(objek)
+                        val dataJson = AdiLinkInfo(episodeHref, title, year, episodeNum, 1).toJson()
                         
-                        newEpisode(dataJson) {
+                        // ERROR FIX: Gunakan .apply {} untuk menghindari Type Mismatch (expected Boolean)
+                        newEpisode(dataJson).apply {
                             this.name = "Episode ${episodeNum ?: episodeText}"
                             this.episode = episodeNum
                         }
@@ -149,8 +151,8 @@ class AdiDewasa : MainAPI() {
                     this.recommendations = recs
                 }
             } else {
-                // HYBRID: Kirim JSON data lengkap
-                val dataJson = AppUtils.toJson(AdiLinkInfo(videoHref, title, year))
+                // ERROR FIX: Gunakan .toJson()
+                val dataJson = AdiLinkInfo(videoHref, title, year).toJson()
                 
                 return newMovieLoadResponse(title, url, TvType.Movie, dataJson) {
                     this.year = year
@@ -200,6 +202,7 @@ class AdiDewasa : MainAPI() {
                     val jsonArr = org.json.JSONArray(res)
                     for (i in 0 until jsonArr.length()) {
                         val item = jsonArr.getJSONObject(i)
+                        // ERROR FIX: Gunakan SubtitleFile langsung (ganti newSubtitleFile)
                         subtitleCallback(
                             SubtitleFile(item.getString("display"), item.getString("url"))
                         )
@@ -240,7 +243,8 @@ class AdiDewasa : MainAPI() {
                 subJson?.optJSONArray(bestQualityKey)?.let { array ->
                     for (i in 0 until array.length()) {
                         val subUrl = array.getString(i)
-                        subtitleCallback(newSubtitleFile("English (Original)", mainUrl + subUrl))
+                        // ERROR FIX: Gunakan SubtitleFile langsung
+                        subtitleCallback(SubtitleFile("English (Original)", mainUrl + subUrl))
                     }
                 }
                 return true
