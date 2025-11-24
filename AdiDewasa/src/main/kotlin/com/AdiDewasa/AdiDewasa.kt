@@ -16,7 +16,6 @@ class AdiDewasa : MainAPI() {
     override val hasDownloadSupport = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.AsianDrama)
 
-    // --- HALAMAN UTAMA (KATEGORI) ---
     override val mainPage: List<MainPageData>
         get() {
             return listOf(
@@ -31,14 +30,12 @@ class AdiDewasa : MainAPI() {
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         try {
-            // Parsing Request Data "Type:Sort:Adult"
             val dataParts = request.data.split(":")
             val type = dataParts.getOrNull(0) ?: "-1"
             val sort = dataParts.getOrNull(1)?.toIntOrNull() ?: 1
             val adultFlag = dataParts.getOrNull(2) ?: "normal"
             val isAdultSection = adultFlag == "adult"
 
-            // Payload JSON untuk API Dramafull
             val jsonPayload = """{
                 "page": $page,
                 "type": "$type",
@@ -70,7 +67,6 @@ class AdiDewasa : MainAPI() {
         }
     }
 
-    // Helper Konversi MediaItem ke SearchResponse
     private fun MediaItem.toSearchResult(): SearchResponse? {
         try {
             val itemTitle = this.title ?: this.name ?: "Unknown Title"
@@ -87,7 +83,6 @@ class AdiDewasa : MainAPI() {
         } catch (e: Exception) { return null }
     }
 
-    // --- PENCARIAN ---
     override suspend fun search(query: String): List<SearchResponse>? {
         try {
             val url = "$mainUrl/api/live-search/$query"
@@ -100,7 +95,6 @@ class AdiDewasa : MainAPI() {
         }
     }
 
-    // --- MUAT DETAIL FILM/SERIAL ---
     override suspend fun load(url: String): LoadResponse {
         try {
             val doc = app.get(url, headers = AdiDewasaUtils.headers).document
@@ -114,7 +108,11 @@ class AdiDewasa : MainAPI() {
             val type = if (hasEpisodes) TvType.TvSeries else TvType.Movie
             val videoHref = doc.selectFirst("div.last-episode a, .watch-button a")?.attr("href") ?: url
 
-            // Rekomendasi
+            // FITUR BARU: AMBIL RATING DARI TMDB
+            // Kita cari ratingnya di sini agar muncul di tampilan detail
+            val tmdbDetails = AdiDewasaUtils.getTmdbDetails(title, year, type == TvType.Movie)
+            val myRating = tmdbDetails.rating // Nilai 0-100
+
             val recs = doc.select("div.film_list-wrap div.flw-item, .recommendations .item").mapNotNull {
                 val rTitle = it.selectFirst("img")?.attr("alt") ?: it.selectFirst("h3, .title")?.text() ?: ""
                 val rImage = it.selectFirst("img")?.attr("data-src") ?: it.selectFirst("img")?.attr("src") ?: ""
@@ -135,9 +133,7 @@ class AdiDewasa : MainAPI() {
                         ?: Regex("""(\d+)""").find(episodeText)?.groupValues?.get(1)?.toIntOrNull()
 
                     if (episodeHref.isNotEmpty()) {
-                        // Packing Data Info untuk Extractor
                         val dataJson = AdiLinkInfo(episodeHref, title, year, episodeNum, 1).toJson()
-                        
                         newEpisode(dataJson).apply {
                             this.name = "Episode ${episodeNum ?: episodeText}"
                             this.episode = episodeNum
@@ -150,17 +146,17 @@ class AdiDewasa : MainAPI() {
                     this.posterUrl = poster
                     this.plot = description
                     this.recommendations = recs
+                    this.rating = myRating // SET RATING
                 }
             } else {
-                // Packing Data Info untuk Extractor
                 val dataJson = AdiLinkInfo(videoHref, title, year).toJson()
-                
                 return newMovieLoadResponse(title, url, TvType.Movie, dataJson) {
                     this.year = year
                     this.tags = genre
                     this.posterUrl = poster
                     this.plot = description
                     this.recommendations = recs
+                    this.rating = myRating // SET RATING
                 }
             }
         } catch (e: Exception) {
@@ -169,7 +165,6 @@ class AdiDewasa : MainAPI() {
         }
     }
 
-    // --- MUAT LINK (PANGGIL EXTRACTOR) ---
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -177,14 +172,12 @@ class AdiDewasa : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         
-        // Parse data JSON yang dikirim dari load()
         val info = try {
             AppUtils.parseJson<AdiLinkInfo>(data)
         } catch (e: Exception) {
             AdiLinkInfo(data, "", null)
         }
 
-        // Panggil Extractor Utama (File Terpisah)
         AdiDewasaExtractor.invokeAll(info, subtitleCallback, callback)
 
         return true
