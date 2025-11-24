@@ -16,53 +16,34 @@ object AdiDewasaExtractor {
     ) {
         val targetUrl = info.url
 
-        // Gunakan List + amap untuk menjalankan fungsi suspend secara paralel
         listOf(
-            // TUGAS 1: DRAMAFULL (SUMBER UTAMA)
+            // TUGAS 1: DRAMAFULL
             suspend { invokeOriginalDramafull(targetUrl, subtitleCallback, callback) },
 
-            // TUGAS 2: HYBRID EXTRACTORS (SUMBER TAMBAHAN)
+            // TUGAS 2: HYBRID EXTRACTORS
             suspend { 
                 if (info.title.isNotEmpty()) {
                     val isMovie = info.season == null
 
-                    // --- KELOMPOK A: EXTRACTOR BERBASIS JUDUL (JALAN LANGSUNG) ---
-                    // Tidak peduli ketemu TMDB ID atau tidak, ini harus tetap jalan!
-                    
-                    // 1. Adimoviebox
+                    // A. Extractor Judul (Jalan Langsung)
                     AdiHybrid.invokeAdimoviebox(info.title, info.year, info.season, info.episode, subtitleCallback, callback)
-                    
-                    // 2. Idlix
                     AdiHybrid.invokeIdlix(info.title, info.year, info.season, info.episode, subtitleCallback, callback)
 
-                    // --- KELOMPOK B: EXTRACTOR BERBASIS ID (BUTUH TMDB) ---
-                    // Cari ID dulu, kalau ketemu baru jalankan sisanya
-                    val (tmdbId, imdbId) = AdiDewasaUtils.getTmdbAndImdbId(info.title, info.year, isMovie)
+                    // B. Extractor ID (Cari TMDB Dulu)
+                    val details = AdiDewasaUtils.getTmdbDetails(info.title, info.year, isMovie)
+                    val tmdbId = details.tmdbId
+                    // val imdbId = details.imdbId // Jika butuh imdb, pakai ini
 
                     if (tmdbId != null) {
-                        // 3. Wyzie Subtitle
                         AdiDewasaUtils.invokeWyzieSubtitle(tmdbId, info.season, info.episode, subtitleCallback)
-
-                        // 4. Vidlink & Vidfast
                         AdiHybrid.invokeVidlink(tmdbId, info.season, info.episode, callback)
-                        // AdiHybrid.invokeVidfast(tmdbId, info.season, info.episode, subtitleCallback, callback) // Vidfast sering lambat, opsional
-                        
-                        // 5. Superembed
                         AdiHybrid.invokeSuperembed(tmdbId, info.season, info.episode, subtitleCallback, callback)
-
-                        // 6. Vidsrc (Butuh IMDB juga)
-                        /* Jika ingin mengaktifkan Vidsrc (Seringkali lambat/mati, aktifkan jika perlu)
-                        if (imdbId != null) {
-                             // Tambahkan logika Vidsrc disini jika ada di AdiHybrid
-                        }
-                        */
                     }
                 }
             }
         ).amap { it.invoke() }
     }
 
-    // --- LOGIKA ASLI DRAMAFULL ---
     private suspend fun invokeOriginalDramafull(
         url: String,
         subtitleCallback: (SubtitleFile) -> Unit,
