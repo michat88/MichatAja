@@ -108,10 +108,10 @@ class AdiDewasa : MainAPI() {
             val type = if (hasEpisodes) TvType.TvSeries else TvType.Movie
             val videoHref = doc.selectFirst("div.last-episode a, .watch-button a")?.attr("href") ?: url
 
-            // FITUR BARU: AMBIL RATING DARI TMDB
-            // Kita cari ratingnya di sini agar muncul di tampilan detail
+            // FITUR RATING (FIXED)
             val tmdbDetails = AdiDewasaUtils.getTmdbDetails(title, year, type == TvType.Movie)
-            val myRating = tmdbDetails.rating // Nilai 0-100
+            // AdiDewasaUtils mengembalikan rating skala 0-100
+            val myRating = tmdbDetails.rating
 
             val recs = doc.select("div.film_list-wrap div.flw-item, .recommendations .item").mapNotNull {
                 val rTitle = it.selectFirst("img")?.attr("alt") ?: it.selectFirst("h3, .title")?.text() ?: ""
@@ -146,7 +146,8 @@ class AdiDewasa : MainAPI() {
                     this.posterUrl = poster
                     this.plot = description
                     this.recommendations = recs
-                    this.rating = myRating // SET RATING
+                    // PERBAIKAN: Gunakan Score.from100()
+                    this.score = Score.from100(myRating)
                 }
             } else {
                 val dataJson = AdiLinkInfo(videoHref, title, year).toJson()
@@ -156,7 +157,8 @@ class AdiDewasa : MainAPI() {
                     this.posterUrl = poster
                     this.plot = description
                     this.recommendations = recs
-                    this.rating = myRating // SET RATING
+                    // PERBAIKAN: Gunakan Score.from100()
+                    this.score = Score.from100(myRating)
                 }
             }
         } catch (e: Exception) {
