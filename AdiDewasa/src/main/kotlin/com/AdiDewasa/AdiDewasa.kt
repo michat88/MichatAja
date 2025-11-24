@@ -4,7 +4,6 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.newExtractorLink
-import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
@@ -13,256 +12,195 @@ class AdiDewasa : MainAPI() {
     override var mainUrl = "https://dramafull.cc"
     override var name = "AdiDewasa"
     override val hasMainPage = true
-    override val hasChromecastSupport = true
-    override val hasDownloadSupport = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.AsianDrama)
 
+    // --- BAGIAN 1: DATA HALAMAN UTAMA ---
     override val mainPage: List<MainPageData>
-        get() {
-            return listOf(
-                MainPageData("Adult Movies - Baru Rilis", "2:1:adult"),
-                MainPageData("Adult Movies - Paling Populer", "2:5:adult"),
-                MainPageData("Adult Movies - Rating Tertinggi", "2:6:adult"),
-                MainPageData("Adult Movies - Sesuai Abjad (A-Z)", "2:3:adult"),
-                MainPageData("Adult Movies - Klasik & Retro (Oldest)", "2:2:adult"),
-                MainPageData("Adult TV Shows - Episode Baru", "1:1:adult"),
-                MainPageData("Adult TV Shows - Paling Populer", "1:5:adult"),
-                MainPageData("All Collections - Rekomendasi Terbaik", "-1:6:adult")
-            )
-        }
+        get() = listOf(
+            MainPageData("Movies - Terbaru", "2:1:adult"),
+            MainPageData("Movies - Populer", "2:5:adult"),
+            MainPageData("TV Shows - Terbaru", "1:1:adult"),
+            MainPageData("TV Shows - Populer", "1:5:adult")
+        )
 
     private fun fixImgUrl(url: String?): String {
         if (url.isNullOrEmpty()) return ""
-        if (url.startsWith("http")) return url
-        val cleanUrl = if (url.startsWith("/")) url else "/$url"
-        return "$mainUrl$cleanUrl"
+        return if (url.startsWith("http")) url else "$mainUrl${if (url.startsWith("/")) "" else "/"}$url"
     }
 
+    // --- BAGIAN 2: LOAD HALAMAN HOME ---
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
         try {
             val dataParts = request.data.split(":")
             val type = dataParts.getOrNull(0) ?: "-1"
             val sort = dataParts.getOrNull(1)?.toIntOrNull() ?: 1
-            val adultFlag = dataParts.getOrNull(2) ?: "normal"
-            val isAdultSection = adultFlag == "adult"
-
-            val jsonPayload = """{
-                "page": $page,
-                "type": "$type",
-                "country": -1,
-                "sort": $sort,
-                "adult": true,
-                "adultOnly": $isAdultSection,
-                "ignoreWatched": false,
-                "genres": [],
-                "keyword": ""
-            }""".trimIndent()
-
-            val payload = jsonPayload.toRequestBody("application/json".toMediaType())
-            val response = app.post("$mainUrl/api/filter", requestBody = payload)
-            val homeResponse = response.parsedSafe<HomeResponse>()
             
-            if (homeResponse?.success == false) {
-                return newHomePageResponse(emptyList(), hasNext = false)
-            }
+            // API Request ke dramafull
+            val jsonPayload = """{"page":$page,"type":"$type","country":-1,"sort":$sort,"adult":true,"adultOnly":true,"ignoreWatched":false,"genres":[],"keyword":""}"""
+            
+            val response = app.post("$mainUrl/api/filter", requestBody = jsonPayload.toRequestBody("application/json".toMediaType()))
+            val homeResponse = response.parsedSafe<HomeResponse>() ?: return newHomePageResponse(emptyList(), false)
+            
+            val searchResults = homeResponse.data?.mapNotNull { item ->
+                val title = item.title ?: item.name ?: return@mapNotNull null
+                val slug = item.slug ?: return@mapNotNull null
+                newMovieSearchResponse(title, "$mainUrl/film/$slug", TvType.Movie) {
+                    this.posterUrl = fixImgUrl(item.image ?: item.poster)
+                }
+            } ?: emptyList()
 
-            val mediaList = homeResponse?.data ?: emptyList()
-            val searchResults = mediaList.mapNotNull { it.toSearchResult() }
-
-            return newHomePageResponse(
-                list = HomePageList(
-                    name = request.name,
-                    list = searchResults,
-                    isHorizontalImages = false
-                ),
-                hasNext = homeResponse?.nextPageUrl != null
-            )
+            return newHomePageResponse(HomePageList(request.name, searchResults), homeResponse.nextPageUrl != null)
         } catch (e: Exception) {
-            e.printStackTrace()
-            return newHomePageResponse(emptyList(), hasNext = false)
+            return newHomePageResponse(emptyList(), false)
         }
     }
 
-    private fun MediaItem.toSearchResult(): SearchResponse? {
-        try {
-            val itemTitle = this.title ?: this.name ?: "Unknown Title"
-            val itemSlug = this.slug ?: return null
-            val itemImage = this.image ?: this.poster
-            val href = "$mainUrl/film/$itemSlug"
-            return newMovieSearchResponse(itemTitle, href, TvType.Movie) {
-                this.posterUrl = fixImgUrl(itemImage)
-            }
-        } catch (e: Exception) {
-            return null
-        }
-    }
-
+    // --- BAGIAN 3: PENCARIAN FILM ---
     override suspend fun search(query: String): List<SearchResponse>? {
-        try {
-            val url = "$mainUrl/api/live-search/$query"
-            val response = app.get(url)
-            val searchResponse = response.parsedSafe<ApiSearchResponse>()
-            return searchResponse?.data?.mapNotNull { it.toSearchResult() }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            return null
-        }
+        return try {
+            app.get("$mainUrl/api/live-search/$query").parsedSafe<ApiSearchResponse>()?.data?.mapNotNull { 
+                val title = it.title ?: it.name ?: return@mapNotNull null
+                newMovieSearchResponse(title, "$mainUrl/film/${it.slug}", TvType.Movie) {
+                    this.posterUrl = fixImgUrl(it.image ?: it.poster)
+                }
+            }
+        } catch (e: Exception) { null }
     }
 
+    // --- BAGIAN 4: LOAD DETAIL FILM ---
     override suspend fun load(url: String): LoadResponse {
-        try {
-            val response = app.get(url)
-            val doc = response.document
-            
-            val title = doc.selectFirst("div.right-info h1, h1.title")?.text() 
-                ?: doc.selectFirst("meta[property='og:title']")?.attr("content") 
-                ?: "Unknown Title"
+        val doc = app.get(url).document
+        val title = doc.selectFirst("div.right-info h1, h1.title")?.text() ?: "Unknown"
+        val poster = fixImgUrl(doc.selectFirst("meta[property='og:image']")?.attr("content"))
+        val desc = doc.selectFirst("div.right-info p.summary-content")?.text()
+        
+        // TRIK PENTING: Simpan judul asli dipisahkan tanda "|" untuk dipakai pencari subtitle nanti
+        val videoHref = doc.selectFirst("div.last-episode a, .watch-button a")?.attr("href") ?: url
+        val dataPayload = "$videoHref|$title" 
 
-            val poster = fixImgUrl(
-                doc.selectFirst("meta[property='og:image']")?.attr("content") 
-                ?: doc.selectFirst("div.poster img")?.attr("src")
-            )
-
-            val description = doc.selectFirst("div.right-info p.summary-content, .summary p")?.text() 
-                ?: doc.selectFirst("meta[property='og:description']")?.attr("content") ?: ""
-
-            val genre = doc.select("div.genre-list a, .genres a").map { it.text() }
-            val year = Regex("""\((\d{4})\)""").find(title)?.groupValues?.get(1)?.toIntOrNull()
-
-            val hasEpisodes = doc.select("div.tab-content.episode-button, .episodes-list, .episode-item").isNotEmpty()
-            
-            // TRICK: Kita simpan JUDUL di dalam data URL dipisahkan dengan tanda "|"
-            // Supaya nanti di loadLinks kita bisa ambil judulnya untuk cari subtitle
-            val videoHref = doc.selectFirst("div.last-episode a, .watch-button a")?.attr("href") ?: url
-            val dataPayload = "$videoHref|$title" 
-
-            val recs = doc.select("div.film_list-wrap div.flw-item, .recommendations .item").mapNotNull {
-                val rTitle = it.selectFirst("img")?.attr("alt") ?: it.selectFirst("h3, .title")?.text() ?: ""
-                val rHref = it.selectFirst("a")?.attr("href") ?: ""
-                if (rTitle.isNotEmpty() && rHref.isNotEmpty()) {
-                    newMovieSearchResponse(rTitle, rHref, TvType.Movie) {
-                        this.posterUrl = fixImgUrl(it.selectFirst("img")?.attr("data-src"))
-                    }
-                } else null
+        // Cek apakah ini Series atau Movie
+        val episodes = doc.select("div.episode-item a, .episode-list a").mapNotNull {
+            val epNum = Regex("""Episode\s*(\d+)""").find(it.text())?.groupValues?.get(1)?.toIntOrNull()
+            // Untuk episode, kita juga kirim judul series-nya
+            newEpisode("${it.attr("href")}|$title") { 
+                this.name = "Episode ${epNum ?: it.text()}"; this.episode = epNum 
             }
+        }
 
-            if (hasEpisodes) {
-                val episodes = doc.select("div.episode-item a, .episode-list a").mapNotNull {
-                    val episodeText = it.text().trim()
-                    val episodeHref = it.attr("href")
-                    val episodeNum = Regex("""Episode\s*(\d+)""", RegexOption.IGNORE_CASE)
-                        .find(episodeText)?.groupValues?.get(1)?.toIntOrNull()
-                        ?: Regex("""^(\d+)$""").find(episodeText)?.groupValues?.get(1)?.toIntOrNull()
-
-                    if (episodeHref.isNotEmpty()) {
-                        // Untuk episode, kita juga pass judulnya
-                        newEpisode("$episodeHref|$title") {
-                            this.name = if(episodeNum != null) "Episode $episodeNum" else episodeText
-                            this.episode = episodeNum
-                        }
-                    } else null
-                }
-                return newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
-                    this.year = year; this.tags = genre; this.posterUrl = poster; this.plot = description; this.recommendations = recs
-                }
-            } else {
-                return newMovieLoadResponse(title, url, TvType.Movie, dataPayload) {
-                    this.year = year; this.tags = genre; this.posterUrl = poster; this.plot = description; this.recommendations = recs
-                }
+        return if (episodes.isNotEmpty()) {
+            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) { 
+                this.posterUrl = poster; this.plot = desc 
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-            throw e
+        } else {
+            newMovieLoadResponse(title, url, TvType.Movie, dataPayload) { 
+                this.posterUrl = poster; this.plot = desc 
+            }
         }
     }
 
-    // --- INTEGRASI SUBSOURCE (LANGSUNG DI SINI) ---
-    private suspend fun fetchSubSource(title: String, subtitleCallback: (SubtitleFile) -> Unit) {
-        try {
-            val cleanTitle = title.replace(Regex("""\(\d{4}\)"""), "").trim().replace(" ", "+")
-            val searchUrl = "https://subsource.net/search/$cleanTitle"
-            val searchDoc = app.get(searchUrl).document
-            
-            // Ambil hasil pencarian pertama
-            val firstResult = searchDoc.selectFirst("div.movie-list div.movie-entry a") ?: return
-            var detailHref = firstResult.attr("href")
-            if (!detailHref.startsWith("http")) detailHref = "https://subsource.net$detailHref"
+    // --- BAGIAN 5: LOGIKA SCRAPING SUBSOURCE (KUNCI UTAMA) ---
+    private suspend fun fetchSubSource(rawTitle: String, subtitleCallback: (SubtitleFile) -> Unit) {
+        // Bersihkan Judul: Hapus Tahun, Episode, dan Simbol aneh
+        val cleanTitle = rawTitle.replace(Regex("""\(\d{4}\)|Episode\s*\d+|Season\s*\d+"""), "")
+            .replace(Regex("""[^a-zA-Z0-9 ]"""), " ") 
+            .trim()
+            .replace(Regex("""\s+"""), " ") // Hapus spasi ganda
 
-            val detailDoc = app.get(detailHref).document
-            // Cari elemen subtitle bahasa Indonesia
-            val indoItems = detailDoc.select("div.language-container:contains(Indonesian) div.subtitle-item, tr:contains(Indonesian)")
+        // Strategi: Coba 2 query berbeda biar pasti ketemu
+        val queries = listOf(
+            cleanTitle.replace(" ", "+"), // Query 1: Judul Lengkap
+            cleanTitle.split(" ").take(2).joinToString("+") // Query 2: Dua kata pertama (jaga-jaga judul kepanjangan)
+        ).distinct()
 
-            indoItems.forEach { item ->
-                val linkEl = item.selectFirst("a.download-button, a")
-                val dwnUrl = linkEl?.attr("href")
-                if (!dwnUrl.isNullOrEmpty()) {
-                    val fullDwnUrl = if (dwnUrl.startsWith("http")) dwnUrl else "https://subsource.net$dwnUrl"
-                    val releaseName = item.select("span.release-name, td:nth-child(1)").text().trim()
-                    val subName = if(releaseName.isNotEmpty()) "Indo: $releaseName" else "Indonesian Sub"
+        // User-Agent supaya tidak dianggap bot oleh SubSource
+        val headers = mapOf("User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0.4472.124 Safari/537.36")
+
+        for (q in queries) {
+            if (q.length < 3) continue // Skip jika query terlalu pendek
+
+            try {
+                // 1. Cari filmnya
+                val searchDoc = app.get("https://subsource.net/search/$q", headers = headers).document
+                val firstResult = searchDoc.selectFirst("div.movie-list div.movie-entry a")
+                
+                if (firstResult != null) {
+                    var detailHref = firstResult.attr("href")
+                    if (!detailHref.startsWith("http")) detailHref = "https://subsource.net$detailHref"
+
+                    // 2. Buka halaman detail film
+                    val detailDoc = app.get(detailHref, headers = headers).document
                     
-                    subtitleCallback(newSubtitleFile("Indonesian", fullDwnUrl))
+                    // 3. Ambil elemen subtitle INDONESIA saja
+                    val indoItems = detailDoc.select("div.language-container:contains(Indonesian) div.subtitle-item, tr:contains(Indonesian)")
+                    
+                    if (indoItems.isNotEmpty()) {
+                        indoItems.forEach { item ->
+                            val dwnUrl = item.selectFirst("a.download-button, a")?.attr("href")
+                            if (!dwnUrl.isNullOrEmpty()) {
+                                val fullUrl = if (dwnUrl.startsWith("http")) dwnUrl else "https://subsource.net$dwnUrl"
+                                val releaseName = item.select("span.release-name").text().trim()
+                                
+                                // Kirim subtitle ke player
+                                subtitleCallback(newSubtitleFile("Indonesia ($releaseName)", fullUrl))
+                            }
+                        }
+                        return // Jika sudah ketemu, berhenti mencari
+                    }
                 }
+            } catch (e: Exception) {
+                // Lanjut ke query berikutnya jika gagal
             }
-        } catch (e: Exception) {
-            // Ignore error search sub
         }
     }
 
+    // --- BAGIAN 6: LOAD VIDEO PLAYER & EXECUTE SUBTITLE ---
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        // PISAHKAN DATA URL DAN JUDUL
-        val dataParts = data.split("|")
-        val linkUrl = dataParts.getOrNull(0) ?: data
-        val titleForSub = dataParts.getOrNull(1) ?: ""
+        // Pisahkan Link Video dan Judul Film
+        val parts = data.split("|")
+        val linkUrl = parts[0]
+        val titleForSub = parts.getOrNull(1) ?: ""
 
-        // 1. CARI SUBTITLE INDONESIA (Background process)
+        // >>> JALANKAN PENCARI SUBTITLE (Scraping) <<<
         if (titleForSub.isNotEmpty()) {
             fetchSubSource(titleForSub, subtitleCallback)
         }
 
-        // 2. PROSES VIDEO UTAMA
+        // >>> JALANKAN EKSTRAKTOR VIDEO <<<
         try {
             val doc = app.get(linkUrl).document
+            // Cari script signedUrl (dramafull protection)
             val script = doc.select("script").find { it.html().contains("signedUrl") }?.html() ?: return false
-            val signedUrlMatch = Regex("""signedUrl\s*=\s*['"]([^'"]+)['"]""").find(script)
-            val signedUrl = signedUrlMatch?.groupValues?.get(1)?.replace("\\/", "/") ?: return false
+            val signedUrl = Regex("""signedUrl\s*=\s*['"]([^'"]+)['"]""").find(script)?.groupValues?.get(1)?.replace("\\/", "/") ?: return false
             
-            val res = app.get(signedUrl).text
-            val resJson = JSONObject(res)
-            val videoSource = resJson.optJSONObject("video_source") ?: return false
-            
+            val json = JSONObject(app.get(signedUrl).text)
+            val videoSource = json.optJSONObject("video_source") ?: return false
             val qualities = videoSource.keys().asSequence().toList().sortedByDescending { it.toIntOrNull() ?: 0 }
-            var foundLink = false
 
             for (key in qualities) {
-                val url = videoSource.optString(key)
-                if (url.isNotEmpty()) {
-                    callback(newExtractorLink(name, "$name ${key}p", url))
-                    foundLink = true
+                val vidUrl = videoSource.optString(key)
+                if (vidUrl.isNotEmpty()) {
+                    callback(newExtractorLink(name, "$name ${key}p", vidUrl))
                     
-                    // Ambil Subtitle Bawaan (jika ada)
-                    val subJson = resJson.optJSONObject("sub")
-                    subJson?.optJSONArray(key)?.let { array ->
-                        for (i in 0 until array.length()) {
-                            val subUrl = array.getString(i)
-                            if (subUrl.isNotEmpty()) {
-                                val cleanSub = fixImgUrl(subUrl)
-                                val lang = if(cleanSub.contains("indo") || cleanSub.contains("_id")) "Indonesian (Ori)" else "English"
-                                subtitleCallback(newSubtitleFile(lang, cleanSub))
+                    // Ambil Subtitle Bawaan (jika ada di server video)
+                    json.optJSONObject("sub")?.optJSONArray(key)?.let { arr ->
+                        for (i in 0 until arr.length()) {
+                            val sUrl = arr.getString(i)
+                            if (sUrl.isNotEmpty()) {
+                                val fixedUrl = if (sUrl.startsWith("http")) sUrl else "$mainUrl$sUrl"
+                                val lang = if(fixedUrl.contains("indo")) "Indonesia (Ori)" else "English (Ori)"
+                                subtitleCallback(newSubtitleFile(lang, fixedUrl))
                             }
                         }
                     }
-                    break 
+                    return true
                 }
             }
-            return foundLink
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        } catch (e: Exception) { e.printStackTrace() }
         return false
     }
 }
