@@ -9,8 +9,11 @@ import com.lagradost.nicehttp.RequestBodyTypes
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
 
-// 1. OBJECT ADIHYBRID (KUMPULAN EXTRACTOR DARI ADIDRAKOR)
-object AdiHybrid {
+// PERBAIKAN: Tambahkan ": MainAPI()" agar bisa pakai fungsi loadExtractor
+object AdiHybrid : MainAPI() {
+    override var mainUrl = "https://dramafull.cc" 
+    override var name = "AdiHybrid"
+    override val supportedTypes = setOf(TvType.Movie)
 
     // ================== ADIMOVIEBOX SOURCE ==================
     suspend fun invokeAdimoviebox(
@@ -119,10 +122,10 @@ object AdiHybrid {
                 
                 val sourceUrl = tryParseJson<ResponseHash>(json)?.embed_url ?: return@forEach
                 
-                // INI YANG SEBELUMNYA ERROR: SEKARANG KELAS AdiJenius SUDAH ADA DI BAWAH
                 if (sourceUrl.contains("jeniusplay")) {
                     AdiJenius().getUrl(sourceUrl, "$idlixAPI/", subtitleCallback, callback)
                 } else {
+                    // SEKARANG FUNGSI INI AKAN BERJALAN KARENA KITA SUDAH EXTEND MainAPI
                     loadExtractor(sourceUrl, "$idlixAPI/", subtitleCallback, callback)
                 }
             }
@@ -189,7 +192,7 @@ object AdiHybrid {
     }
 }
 
-// 2. CLASS ADIJENIUS (DIBUTUHKAN OLEH PLUGIN DAN IDLIX)
+// CLASS ADIJENIUS
 open class AdiJenius : ExtractorApi() {
     override val name = "AdiJenius"
     override val mainUrl = "https://jeniusplay.com"
