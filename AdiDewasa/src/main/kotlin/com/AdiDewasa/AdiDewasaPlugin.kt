@@ -7,7 +7,7 @@ import android.content.Context
 @CloudstreamPlugin
 class AdiDewasaPlugin : Plugin() {
     override fun load(context: Context) {
-        // Mendaftarkan API Utama
         registerMainAPI(AdiDewasa())
+        registerExtractorAPI(AdiJenius()) // Tambahkan baris ini
     }
 }
