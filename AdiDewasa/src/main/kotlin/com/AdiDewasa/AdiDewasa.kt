@@ -4,15 +4,9 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.AppUtils
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.newExtractorLink
-import com.lagradost.cloudstream3.utils.INFER_TYPE
 import com.lagradost.cloudstream3.SubtitleFile
-// IMPORT PENTING: Mengambil kekuatan dari AdiDrakor
-import com.AdiDrakor.AdiDrakorExtractor 
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONObject
-import java.net.URLEncoder
 
 class AdiDewasa : MainAPI() {
     override var mainUrl = "https://dramafull.cc"
@@ -22,7 +16,6 @@ class AdiDewasa : MainAPI() {
     override val hasDownloadSupport = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.AsianDrama)
 
-    // --- MAIN PAGE ---
     override val mainPage: List<MainPageData>
         get() {
             return listOf(
@@ -102,7 +95,6 @@ class AdiDewasa : MainAPI() {
         }
     }
 
-    // --- LOAD FUNCTION ---
     override suspend fun load(url: String): LoadResponse {
         try {
             val doc = app.get(url).document
@@ -136,6 +128,7 @@ class AdiDewasa : MainAPI() {
                         ?: Regex("""(\d+)""").find(episodeText)?.groupValues?.get(1)?.toIntOrNull()
 
                     if (episodeHref.isNotEmpty()) {
+                        // Packing Data menggunakan AdiLinkInfo yang ada di AdiDewasaExtractor
                         val dataJson = AdiLinkInfo(episodeHref, title, year, episodeNum, 1).toJson()
                         newEpisode(dataJson).apply {
                             this.name = "Episode ${episodeNum ?: episodeText}"
@@ -166,7 +159,6 @@ class AdiDewasa : MainAPI() {
         }
     }
 
-    // --- LOAD LINKS (ULTIMATE HYBRID: DRAMAFULL + ADIDRAKOR EXTRACTORS) ---
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -174,180 +166,16 @@ class AdiDewasa : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         
+        // Parse data
         val info = try {
             AppUtils.parseJson<AdiLinkInfo>(data)
         } catch (e: Exception) {
             AdiLinkInfo(data, "", null)
         }
-        val targetUrl = info.url
 
-        // KITA JALANKAN SEMUA SECARA PARALEL (ASYNC)
-        com.lagradost.cloudstream3.utils.AppUtils.runAllAsync(
-            // TUGAS 1: LOAD DARI DRAMAFULL (SUMBER UTAMA)
-            {
-                loadDramafullSource(targetUrl, subtitleCallback, callback)
-            },
-
-            // TUGAS 2: LOAD DARI ADIDRAKOR EXTRACTORS (SUMBER CADANGAN)
-            {
-                if (info.title.isNotEmpty()) {
-                    val isMovie = info.season == null
-                    // Cari TMDB ID & IMDB ID
-                    val ids = getTmdbAndImdbId(info.title, info.year, isMovie)
-                    val tmdbId = ids.first
-                    val imdbId = ids.second
-
-                    if (tmdbId != null) {
-                        // A. Load Subtitle Wyzie
-                        loadWyzieSubtitle(tmdbId, info.season, info.episode, subtitleCallback)
-
-                        // B. Panggil SEMUA Extractor dari AdiDrakor
-                        // Kita panggil satu per satu, aman karena sudah di dalam thread async
-                        
-                        // 1. Adimoviebox (Paling Cocok)
-                        AdiDrakorExtractor.invokeAdimoviebox(info.title, info.year, info.season, info.episode, subtitleCallback, callback)
-                        
-                        // 2. Idlix (Populer)
-                        AdiDrakorExtractor.invokeIdlix(info.title, info.year, info.season, info.episode, subtitleCallback, callback)
-                        
-                        // 3. Vidlink & Vidfast
-                        AdiDrakorExtractor.invokeVidlink(tmdbId, info.season, info.episode, callback)
-                        AdiDrakorExtractor.invokeVidfast(tmdbId, info.season, info.episode, subtitleCallback, callback)
-                        
-                        // 4. Superembed
-                        AdiDrakorExtractor.invokeSuperembed(tmdbId, info.season, info.episode, subtitleCallback, callback)
-
-                        // 5. Vidsrc (Butuh IMDB ID)
-                        if (imdbId != null) {
-                            AdiDrakorExtractor.invokeVidsrc(imdbId, info.season, info.episode, subtitleCallback, callback)
-                            AdiDrakorExtractor.invokeVidsrccc(tmdbId, imdbId, info.season, info.episode, subtitleCallback, callback)
-                            AdiDrakorExtractor.invokeWatchsomuch(imdbId, info.season, info.episode, subtitleCallback)
-                        }
-
-                        // 6. Xprime, Mapple, dll
-                        AdiDrakorExtractor.invokeXprime(tmdbId, info.title, info.year, info.season, info.episode, subtitleCallback, callback)
-                        AdiDrakorExtractor.invokeMapple(tmdbId, info.season, info.episode, subtitleCallback, callback)
-                    }
-                }
-            }
-        )
+        // Panggil Extractor dari file terpisah
+        AdiDewasaExtractor.invokeAll(info, subtitleCallback, callback)
 
         return true
-    }
-
-    // --- FUNGSI KHUSUS DRAMAFULL ---
-    private suspend fun loadDramafullSource(
-        targetUrl: String, 
-        subtitleCallback: (SubtitleFile) -> Unit, 
-        callback: (ExtractorLink) -> Unit
-    ) {
-        try {
-            val doc = app.get(targetUrl).document
-            val script = doc.select("script:containsData(signedUrl)").firstOrNull()?.toString() ?: return
-            
-            val signedUrl = Regex("""window\.signedUrl\s*=\s*["'](.+?)["']""").find(script)?.groupValues?.get(1)?.replace("\\/", "/") 
-                ?: return
-            
-            val res = app.get(signedUrl).text
-            val resJson = JSONObject(res)
-            val videoSource = resJson.optJSONObject("video_source") ?: return
-            
-            val qualities = videoSource.keys().asSequence().toList()
-                .sortedByDescending { it.toIntOrNull() ?: 0 }
-            val bestQualityKey = qualities.firstOrNull() ?: return
-            val bestQualityUrl = videoSource.optString(bestQualityKey)
-
-            if (bestQualityUrl.isNotEmpty()) {
-                callback(
-                    newExtractorLink(
-                        name,
-                        name,
-                        bestQualityUrl,
-                        INFER_TYPE
-                    ) {
-                        this.referer = targetUrl
-                        this.headers = mapOf(
-                            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
-                        )
-                    }
-                )
-                
-                val subJson = resJson.optJSONObject("sub")
-                subJson?.optJSONArray(bestQualityKey)?.let { array ->
-                    for (i in 0 until array.length()) {
-                        val subUrl = array.getString(i)
-                        subtitleCallback(SubtitleFile("English (Original)", mainUrl + subUrl))
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            // Ignore error from Dramafull source if it fails, backup extractors will run
-        }
-    }
-
-    private suspend fun loadWyzieSubtitle(tmdbId: Int, season: Int?, episode: Int?, subtitleCallback: (SubtitleFile) -> Unit) {
-        val wyzieUrl = if (season == null) 
-            "https://sub.wyzie.ru/search?id=$tmdbId"
-        else 
-            "https://sub.wyzie.ru/search?id=$tmdbId&season=$season&episode=$episode"
-        
-        try {
-            val res = app.get(wyzieUrl).text
-            val jsonArr = org.json.JSONArray(res)
-            for (i in 0 until jsonArr.length()) {
-                val item = jsonArr.getJSONObject(i)
-                subtitleCallback(
-                    SubtitleFile(item.getString("display"), item.getString("url"))
-                )
-            }
-        } catch (e: Exception) { }
-    }
-
-    // --- HELPER FUNCTIONS ---
-
-    data class AdiLinkInfo(
-        val url: String,
-        val title: String,
-        val year: Int?,
-        val episode: Int? = null,
-        val season: Int? = null
-    )
-
-    data class TmdbSearch(val results: List<TmdbRes>?)
-    data class TmdbRes(val id: Int?)
-    data class TmdbExternalIds(val imdb_id: String?)
-
-    // Mengambil TMDB ID dan IMDB ID sekaligus
-    private suspend fun getTmdbAndImdbId(title: String, year: Int?, isMovie: Boolean): Pair<Int?, String?> {
-        try {
-            val apiKey = "b030404650f279792a8d3287232358e3"
-            val type = if (isMovie) "movie" else "tv"
-            val q = URLEncoder.encode(title, "UTF-8")
-            
-            // 1. Cari TMDB ID
-            var tmdbId: Int? = null
-            
-            if (year != null) {
-                val url = "https://api.themoviedb.org/3/search/$type?api_key=$apiKey&query=$q&year=$year"
-                val res = app.get(url).parsedSafe<TmdbSearch>()?.results?.firstOrNull()?.id
-                tmdbId = res
-            }
-            
-            if (tmdbId == null) {
-                val urlNoYear = "https://api.themoviedb.org/3/search/$type?api_key=$apiKey&query=$q"
-                tmdbId = app.get(urlNoYear).parsedSafe<TmdbSearch>()?.results?.firstOrNull()?.id
-            }
-
-            if (tmdbId == null) return Pair(null, null)
-
-            // 2. Cari IMDB ID (External IDs)
-            val extUrl = "https://api.themoviedb.org/3/$type/$tmdbId/external_ids?api_key=$apiKey"
-            val imdbId = app.get(extUrl).parsedSafe<TmdbExternalIds>()?.imdb_id
-
-            return Pair(tmdbId, imdbId)
-
-        } catch (e: Exception) {
-            return Pair(null, null)
-        }
     }
 }
