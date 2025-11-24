@@ -1,5 +1,6 @@
 package com.AdiDewasa
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.*
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
@@ -8,8 +9,7 @@ import com.lagradost.nicehttp.RequestBodyTypes
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
 
-// Objek ini berisi semua "Kekuatan" yang dicopy dari AdiDrakor
-// Tapi sekarang berada di dalam package com.AdiDewasa
+// 1. OBJECT ADIHYBRID (KUMPULAN EXTRACTOR DARI ADIDRAKOR)
 object AdiHybrid {
 
     // ================== ADIMOVIEBOX SOURCE ==================
@@ -78,7 +78,6 @@ object AdiHybrid {
         } catch (e: Exception) { }
     }
 
-    // Data Class Internal Adimoviebox
     data class AdimovieboxSearch(val data: AdimovieboxData?)
     data class AdimovieboxData(val items: List<AdimovieboxItem>?)
     data class AdimovieboxItem(val subjectId: String?, val title: String?, val releaseDate: String?, val detailPath: String?)
@@ -119,6 +118,8 @@ object AdiHybrid {
                 ).text
                 
                 val sourceUrl = tryParseJson<ResponseHash>(json)?.embed_url ?: return@forEach
+                
+                // INI YANG SEBELUMNYA ERROR: SEKARANG KELAS AdiJenius SUDAH ADA DI BAWAH
                 if (sourceUrl.contains("jeniusplay")) {
                     AdiJenius().getUrl(sourceUrl, "$idlixAPI/", subtitleCallback, callback)
                 } else {
@@ -186,4 +187,74 @@ object AdiHybrid {
             }
         } catch (e: Exception) { }
     }
+}
+
+// 2. CLASS ADIJENIUS (DIBUTUHKAN OLEH PLUGIN DAN IDLIX)
+open class AdiJenius : ExtractorApi() {
+    override val name = "AdiJenius"
+    override val mainUrl = "https://jeniusplay.com"
+    override val requiresReferer = true
+
+    override suspend fun getUrl(
+        url: String,
+        referer: String?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        val document = app.get(url, referer = "$mainUrl/").document
+        val hash = url.split("/").last().substringAfter("data=")
+
+        val m3uLink = app.post(
+            url = "$mainUrl/player/index.php?data=$hash&do=getVideo",
+            data = mapOf("hash" to hash, "r" to "$referer"),
+            referer = url,
+            headers = mapOf("X-Requested-With" to "XMLHttpRequest")
+        ).parsed<ResponseSource>().videoSource
+
+        callback.invoke(
+            newExtractorLink(
+                this.name,
+                this.name,
+                m3uLink,
+                ExtractorLinkType.M3U8
+            ) {
+                this.referer = url
+            }
+        )
+
+        document.select("script").map { script ->
+            if (script.data().contains("eval(function(p,a,c,k,e,d)")) {
+                val subData =
+                    getAndUnpack(script.data()).substringAfter("\"tracks\":[").substringBefore("],")
+                tryParseJson<List<Tracks>>("[$subData]")?.map { subtitle ->
+                    subtitleCallback.invoke(
+                        SubtitleFile(
+                            getLanguage(subtitle.label ?: ""),
+                            subtitle.file
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    private fun getLanguage(str: String): String {
+        return when {
+            str.contains("indonesia", true) || str
+                .contains("bahasa", true) -> "Indonesian"
+            else -> str
+        }
+    }
+
+    data class ResponseSource(
+        @JsonProperty("hls") val hls: Boolean,
+        @JsonProperty("videoSource") val videoSource: String,
+        @JsonProperty("securedLink") val securedLink: String?,
+    )
+
+    data class Tracks(
+        @JsonProperty("kind") val kind: String?,
+        @JsonProperty("file") val file: String,
+        @JsonProperty("label") val label: String?,
+    )
 }
