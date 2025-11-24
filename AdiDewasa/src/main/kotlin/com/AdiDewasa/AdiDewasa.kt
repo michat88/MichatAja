@@ -67,21 +67,30 @@ class AdiDewasa : MainAPI() {
         } catch (e: Exception) { null }
     }
 
-    // --- BAGIAN 4: LOAD DETAIL FILM ---
+    // --- BAGIAN 4: LOAD DETAIL FILM (DENGAN FIX TAHUN) ---
     override suspend fun load(url: String): LoadResponse {
         val doc = app.get(url).document
-        val title = doc.selectFirst("div.right-info h1, h1.title")?.text() ?: "Unknown"
+        
+        // 1. Ambil Judul Mentah
+        val rawTitle = doc.selectFirst("div.right-info h1, h1.title")?.text() ?: "Unknown"
+        
+        // 2. Ekstrak Tahun dari Judul (Contoh: "Judul (2024)")
+        val yearRegex = Regex("""\((\d{4})\)""")
+        val year = yearRegex.find(rawTitle)?.groupValues?.get(1)?.toIntOrNull()
+        
+        // 3. Bersihkan Judul (Hapus tahun dari string judul agar rapi)
+        val title = rawTitle.replace(yearRegex, "").trim()
+
         val poster = fixImgUrl(doc.selectFirst("meta[property='og:image']")?.attr("content"))
         val desc = doc.selectFirst("div.right-info p.summary-content")?.text()
         
-        // TRIK PENTING: Simpan judul asli dipisahkan tanda "|" untuk dipakai pencari subtitle nanti
+        // Simpan judul bersih untuk pencarian subtitle nanti
         val videoHref = doc.selectFirst("div.last-episode a, .watch-button a")?.attr("href") ?: url
         val dataPayload = "$videoHref|$title" 
 
-        // Cek apakah ini Series atau Movie
         val episodes = doc.select("div.episode-item a, .episode-list a").mapNotNull {
             val epNum = Regex("""Episode\s*(\d+)""").find(it.text())?.groupValues?.get(1)?.toIntOrNull()
-            // Untuk episode, kita juga kirim judul series-nya
+            // Kirim judul series ke setiap episode untuk pencarian sub
             newEpisode("${it.attr("href")}|$title") { 
                 this.name = "Episode ${epNum ?: it.text()}"; this.episode = epNum 
             }
@@ -89,37 +98,40 @@ class AdiDewasa : MainAPI() {
 
         return if (episodes.isNotEmpty()) {
             newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) { 
-                this.posterUrl = poster; this.plot = desc 
+                this.posterUrl = poster
+                this.plot = desc
+                this.year = year // Masukkan tahun disini
             }
         } else {
             newMovieLoadResponse(title, url, TvType.Movie, dataPayload) { 
-                this.posterUrl = poster; this.plot = desc 
+                this.posterUrl = poster
+                this.plot = desc
+                this.year = year // Masukkan tahun disini
             }
         }
     }
 
-    // --- BAGIAN 5: LOGIKA SCRAPING SUBSOURCE (KUNCI UTAMA) ---
+    // --- BAGIAN 5: LOGIKA SCRAPING SUBSOURCE (AUTO INDO) ---
     private suspend fun fetchSubSource(rawTitle: String, subtitleCallback: (SubtitleFile) -> Unit) {
-        // Bersihkan Judul: Hapus Tahun, Episode, dan Simbol aneh
+        // Bersihkan Judul: Hapus Tahun, Episode, Simbol
         val cleanTitle = rawTitle.replace(Regex("""\(\d{4}\)|Episode\s*\d+|Season\s*\d+"""), "")
             .replace(Regex("""[^a-zA-Z0-9 ]"""), " ") 
             .trim()
-            .replace(Regex("""\s+"""), " ") // Hapus spasi ganda
+            .replace(Regex("""\s+"""), " ")
 
-        // Strategi: Coba 2 query berbeda biar pasti ketemu
+        // Strategi: Coba Judul Lengkap & 2 Kata Pertama
         val queries = listOf(
-            cleanTitle.replace(" ", "+"), // Query 1: Judul Lengkap
-            cleanTitle.split(" ").take(2).joinToString("+") // Query 2: Dua kata pertama (jaga-jaga judul kepanjangan)
+            cleanTitle.replace(" ", "+"), 
+            cleanTitle.split(" ").take(2).joinToString("+") 
         ).distinct()
 
-        // User-Agent supaya tidak dianggap bot oleh SubSource
         val headers = mapOf("User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0.4472.124 Safari/537.36")
 
         for (q in queries) {
-            if (q.length < 3) continue // Skip jika query terlalu pendek
+            if (q.length < 3) continue 
 
             try {
-                // 1. Cari filmnya
+                // 1. Cari filmnya di SubSource
                 val searchDoc = app.get("https://subsource.net/search/$q", headers = headers).document
                 val firstResult = searchDoc.selectFirst("div.movie-list div.movie-entry a")
                 
@@ -127,10 +139,10 @@ class AdiDewasa : MainAPI() {
                     var detailHref = firstResult.attr("href")
                     if (!detailHref.startsWith("http")) detailHref = "https://subsource.net$detailHref"
 
-                    // 2. Buka halaman detail film
+                    // 2. Buka detail page
                     val detailDoc = app.get(detailHref, headers = headers).document
                     
-                    // 3. Ambil elemen subtitle INDONESIA saja
+                    // 3. Ambil subtitle Indonesia
                     val indoItems = detailDoc.select("div.language-container:contains(Indonesian) div.subtitle-item, tr:contains(Indonesian)")
                     
                     if (indoItems.isNotEmpty()) {
@@ -139,21 +151,19 @@ class AdiDewasa : MainAPI() {
                             if (!dwnUrl.isNullOrEmpty()) {
                                 val fullUrl = if (dwnUrl.startsWith("http")) dwnUrl else "https://subsource.net$dwnUrl"
                                 val releaseName = item.select("span.release-name").text().trim()
-                                
-                                // Kirim subtitle ke player
                                 subtitleCallback(newSubtitleFile("Indonesia ($releaseName)", fullUrl))
                             }
                         }
-                        return // Jika sudah ketemu, berhenti mencari
+                        return // Ketemu, stop pencarian
                     }
                 }
             } catch (e: Exception) {
-                // Lanjut ke query berikutnya jika gagal
+                // Lanjut ke query berikutnya
             }
         }
     }
 
-    // --- BAGIAN 6: LOAD VIDEO PLAYER & EXECUTE SUBTITLE ---
+    // --- BAGIAN 6: LOAD VIDEO & SUBTITLE ---
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -165,12 +175,12 @@ class AdiDewasa : MainAPI() {
         val linkUrl = parts[0]
         val titleForSub = parts.getOrNull(1) ?: ""
 
-        // >>> JALANKAN PENCARI SUBTITLE (Scraping) <<<
+        // 1. Cari Subtitle Indo (Background Process)
         if (titleForSub.isNotEmpty()) {
             fetchSubSource(titleForSub, subtitleCallback)
         }
 
-        // >>> JALANKAN EKSTRAKTOR VIDEO <<<
+        // 2. Ekstrak Video dari Dramafull
         try {
             val doc = app.get(linkUrl).document
             // Cari script signedUrl (dramafull protection)
@@ -186,7 +196,7 @@ class AdiDewasa : MainAPI() {
                 if (vidUrl.isNotEmpty()) {
                     callback(newExtractorLink(name, "$name ${key}p", vidUrl))
                     
-                    // Ambil Subtitle Bawaan (jika ada di server video)
+                    // Ambil Subtitle Bawaan (English/Original dari server)
                     json.optJSONObject("sub")?.optJSONArray(key)?.let { arr ->
                         for (i in 0 until arr.length()) {
                             val sUrl = arr.getString(i)
