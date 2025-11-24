@@ -1,12 +1,13 @@
-package com.AdiDewasa // Diubah dari com.dramafull
+package com.AdiDewasa
 
-import com.lagradost.cloudstream3.plugins.BasePlugin
 import com.lagradost.cloudstream3.plugins.CloudstreamPlugin
+import com.lagradost.cloudstream3.plugins.Plugin
+import android.content.Context
 
 @CloudstreamPlugin
-class AdiDewasaPlugin: BasePlugin() { // Diubah dari DramaFullPlugin
-    override fun load() {
-        // All providers should be added in this manner. Please don't edit the providers list directly.
-        registerMainAPI(AdiDewasa()) // Diubah dari DramaFull()
+class AdiDewasaPlugin : Plugin() {
+    override fun load(context: Context) {
+        // Mendaftarkan API Utama
+        registerMainAPI(AdiDewasa())
     }
 }
