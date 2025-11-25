@@ -1,40 +1,20 @@
 package com.AdiDewasa
 
-import com.AdiDewasa.AdiDewasaExtractor.invokeAdiDewasaDirect
-import com.AdiDewasa.AdiDewasaExtractor.invokeIdlix
-import com.AdiDewasa.AdiDewasaExtractor.invokeMapple
-import com.AdiDewasa.AdiDewasaExtractor.invokeSuperembed
-import com.AdiDewasa.AdiDewasaExtractor.invokeVidfast
-import com.AdiDewasa.AdiDewasaExtractor.invokeVidlink
-import com.AdiDewasa.AdiDewasaExtractor.invokeVidsrc
-import com.AdiDewasa.AdiDewasaExtractor.invokeVidsrccc
-import com.AdiDewasa.AdiDewasaExtractor.invokeVixsrc
-import com.AdiDewasa.AdiDewasaExtractor.invokeWyzie
-import com.AdiDewasa.AdiDewasaExtractor.invokeXprime
 import com.lagradost.cloudstream3.*
-import com.lagradost.cloudstream3.utils.AppUtils.parseJson
-import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.network.CloudflareKiller
+import com.lagradost.cloudstream3.utils.newExtractorLink
+import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 
 class AdiDewasa : MainAPI() {
     override var mainUrl = "https://dramafull.cc"
     override var name = "AdiDewasa"
     override val hasMainPage = true
-    override val hasQuickSearch = true
     override val hasChromecastSupport = true
     override val hasDownloadSupport = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.AsianDrama)
-
-    private val cfInterceptor by lazy { CloudflareKiller() }
-    
-    private val webHeaders = mapOf(
-        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept" to "application/json, text/plain, */*",
-        "Referer" to "$mainUrl/"
-    )
 
     override val mainPage: List<MainPageData>
         get() = listOf(
@@ -66,15 +46,15 @@ class AdiDewasa : MainAPI() {
             }""".trimIndent()
 
             val payload = jsonPayload.toRequestBody("application/json".toMediaType())
-
-            val response = app.post(
-                "$mainUrl/api/filter", 
-                requestBody = payload, 
-                headers = webHeaders, 
-                interceptor = cfInterceptor
-            )
+            val response = app.post("$mainUrl/api/filter", requestBody = payload)
             
+            // Menggunakan tryParseJson agar tidak crash jika format berubah
             val homeResponse = response.parsedSafe<HomeResponse>()
+            
+            if (homeResponse?.success == false) {
+                return newHomePageResponse(emptyList(), hasNext = false)
+            }
+
             val mediaList = homeResponse?.data ?: emptyList()
             val searchResults = mediaList.mapNotNull { it.toSearchResult() }
 
@@ -84,7 +64,7 @@ class AdiDewasa : MainAPI() {
             )
         } catch (e: Exception) {
             e.printStackTrace()
-            return newHomePageResponse(emptyList(), false)
+            return newHomePageResponse(emptyList(), hasNext = false)
         }
     }
 
@@ -106,41 +86,41 @@ class AdiDewasa : MainAPI() {
     override suspend fun search(query: String): List<SearchResponse>? {
         val url = "$mainUrl/api/live-search/$query"
         return try {
-            app.get(url, headers = webHeaders, interceptor = cfInterceptor)
-                .parsedSafe<ApiSearchResponse>()?.data?.mapNotNull { it.toSearchResult() }
+            app.get(url).parsedSafe<ApiSearchResponse>()?.data?.mapNotNull { it.toSearchResult() }
         } catch (e: Exception) {
             null
         }
     }
 
+    // --- BAGIAN PENTING: Perbaikan Fungsi Load ---
     override suspend fun load(url: String): LoadResponse {
-        val response = app.get(url, headers = webHeaders, interceptor = cfInterceptor)
+        val response = app.get(url)
         val document = response.document
-        
-        // --- CLEANER LOGIC START ---
+
+        // 1. Ambil Metadata dari Meta Tags (Lebih Stabil daripada Selector CSS biasa)
         val ogTitle = document.select("meta[property=og:title]").attr("content")
         val fallbackTitle = document.selectFirst("h1")?.text() ?: "Unknown Title"
         val rawTitle = if (ogTitle.isNotEmpty()) ogTitle else fallbackTitle
 
-        // Membersihkan judul dari sampah SEO seperti "Watch Eva - Movie subbed..."
+        // 2. Title Cleaner: Membersihkan judul dari sampah "Watch... subbed..."
+        // Contoh: "Watch Eva - Movie subbed online..." -> Menjadi "Eva"
         val title = rawTitle
-            .replace(Regex("(?i)^Watch\\s+"), "") // Hapus "Watch " di depan
-            .substringBefore(" - Movie")          // Hapus suffix " - Movie..."
-            .substringBefore(" subbed")           // Hapus suffix " subbed..."
-            .substringBefore(" online")           // Hapus suffix " online..."
-            .substringBefore(",")                 // Hapus koma dan setelahnya (opsional)
+            .replace(Regex("(?i)^Watch\\s+"), "")
+            .substringBefore(" - Movie")
+            .substringBefore(" subbed")
+            .substringBefore(" online")
             .trim()
 
         val poster = document.select("meta[property=og:image]").attr("content")
         val desc = document.select("meta[property=og:description]").attr("content")
         
-        // Logika Tahun
+        // 3. Ambil Tahun & Genre
         var year = Regex("\\d{4}").find(title)?.value?.toIntOrNull()
-        if (year == null) {
-             year = Regex("\\d{4}").find(document.text())?.value?.toIntOrNull()
-        }
+        if (year == null) year = Regex("\\d{4}").find(document.text())?.value?.toIntOrNull()
         
-        // Logika Episode
+        val tags = document.select("div.genre-list a, .genres a").map { it.text() }
+
+        // 4. Deteksi Episode
         val episodes = document.select(".episode-list a, .episode-item a, ul.episodes li a").mapNotNull {
             val text = it.text()
             val href = it.attr("href")
@@ -149,33 +129,44 @@ class AdiDewasa : MainAPI() {
             
             if (epNum == null) return@mapNotNull null
             
-            newEpisode(
-                LinkData(
-                    url = fixUrl(href),
-                    title = title, // Judul sudah bersih di sini
-                    year = year,
-                    season = 1,
-                    episode = epNum
-                ).toJson()
-            ) {
+            newEpisode(href) {
                 this.name = "Episode $epNum"
                 this.episode = epNum
             }
         }
 
+        // 5. Rekomendasi
+        val recommendations = document.select("div.film_list-wrap div.flw-item").mapNotNull {
+            val recTitle = it.select("h3.film-name a").text()
+            val recHref = it.select("h3.film-name a").attr("href")
+            val recPoster = it.select("img.film-poster-img").attr("data-src")
+            if (recTitle.isEmpty()) return@mapNotNull null
+            newMovieSearchResponse(recTitle, "$mainUrl$recHref", TvType.Movie) {
+                this.posterUrl = recPoster
+            }
+        }
+
+        // 6. Return Data yang Benar
         val tvType = if (episodes.isNotEmpty()) TvType.TvSeries else TvType.Movie
+        
+        // Untuk Movie, kita kirim URL halaman ini lagi ke loadLinks agar diproses
+        val dataUrl = if (tvType == TvType.Movie) url else ""
 
         return if (tvType == TvType.TvSeries) {
             newTvSeriesLoadResponse(title, url, tvType, episodes) {
                 this.posterUrl = poster
                 this.plot = desc
                 this.year = year
+                this.tags = tags
+                this.recommendations = recommendations
             }
         } else {
-            newMovieLoadResponse(title, url, tvType, LinkData(url, title, year).toJson()) {
+            newMovieLoadResponse(title, url, tvType, dataUrl) {
                 this.posterUrl = poster
                 this.plot = desc
                 this.year = year
+                this.tags = tags
+                this.recommendations = recommendations
             }
         }
     }
@@ -186,24 +177,66 @@ class AdiDewasa : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        
-        val res = parseJson<LinkData>(data)
-        
-        // Pastikan judul bersih dikirim ke extractor
-        val cleanTitle = res.title.trim()
+        // Data adalah URL halaman film
+        if (data.isEmpty()) return false
 
-        runAllAsync(
-            { invokeAdiDewasaDirect(res.url, callback, subtitleCallback) },
-            // Gunakan cleanTitle untuk extractor eksternal agar pencarian akurat
-            { invokeIdlix(cleanTitle, res.year, res.season, res.episode, subtitleCallback, callback) },
-            { invokeVidsrc(null, res.season, res.episode, subtitleCallback, callback) },
-            { invokeXprime(null, cleanTitle, res.year, res.season, res.episode, subtitleCallback, callback) },
-            { invokeVidfast(null, res.season, res.episode, subtitleCallback, callback) },
-            { invokeVidlink(null, res.season, res.episode, callback) },
-            { invokeMapple(null, res.season, res.episode, subtitleCallback, callback) },
-            { invokeVixsrc(null, res.season, res.episode, callback) }
-        )
+        try {
+            val doc = app.get(data).document
+            
+            // Mencari variabel signedUrl di dalam script
+            val allScripts = doc.select("script").joinToString(" ") { it.data() }
+            val signedUrl = Regex("""(window\.)?signedUrl\s*=\s*["']([^"']+)["']""").find(allScripts)
+                ?.groupValues?.lastOrNull()?.replace("\\/", "/") 
+                ?: return false
+            
+            // Request ke API Player internal
+            val jsonText = app.get(
+                signedUrl, 
+                referer = data,
+                headers = mapOf("X-Requested-With" to "XMLHttpRequest")
+            ).text
+            
+            val json = JSONObject(jsonText)
+            
+            // Ambil Video Source
+            val videoSource = json.optJSONObject("video_source") ?: return false
+            val qualities = videoSource.keys().asSequence().toList()
+            
+            qualities.forEach { quality ->
+                val link = videoSource.optString(quality)
+                if (link.isNotEmpty()) {
+                    callback.invoke(
+                        newExtractorLink(
+                            this.name,
+                            "AdiDewasa $quality",
+                            link,
+                            ExtractorLinkType.M3U8,
+                            quality = quality.toIntOrNull() ?:0
+                        )
+                    )
+                }
+            }
 
-        return true
+            // Ambil Subtitle
+            val subJson = json.optJSONObject("sub")
+            val bestQuality = qualities.maxByOrNull { it.toIntOrNull() ?: 0 }
+            if (bestQuality != null) {
+                val subs = subJson?.optJSONArray(bestQuality)
+                if (subs != null) {
+                    for (i in 0 until subs.length()) {
+                        val subPath = subs.getString(i)
+                        val subUrl = if (subPath.startsWith("http")) subPath else "$mainUrl$subPath"
+                        subtitleCallback.invoke(
+                            newSubtitleFile("English", subUrl)
+                        )
+                    }
+                }
+            }
+            return true
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return false
+        }
     }
 }
