@@ -2,10 +2,12 @@ package com.AdiDewasa
 
 import com.fasterxml.jackson.annotation.JsonProperty
 
-// Data Class untuk parsing Home Page API
+// --- Data Class untuk Parsing JSON API ---
+
 data class HomeResponse(
     @JsonProperty("data") val data: List<MediaItem>? = null,
-    @JsonProperty("next_page_url") val nextPageUrl: String? = null
+    @JsonProperty("next_page_url") val nextPageUrl: String? = null,
+    @JsonProperty("success") val success: Boolean? = null // <-- PERBAIKAN: Field ini ditambahkan
 )
 
 data class MediaItem(
@@ -16,12 +18,12 @@ data class MediaItem(
     @JsonProperty("poster") val poster: String? = null
 )
 
-// Data Class untuk Search API
 data class ApiSearchResponse(
     @JsonProperty("data") val data: List<MediaItem>? = null
 )
 
-// Data Class untuk LinkData (disimpan di load() dan dipakai di loadLinks())
+// --- Data Class Internal untuk Menyimpan Info Link ---
+
 data class LinkData(
     val url: String,
     val title: String,
@@ -30,7 +32,8 @@ data class LinkData(
     val episode: Int? = null
 )
 
-// Helper Class untuk Extractor WpMovies
+// --- Helper Class untuk Extractor WpMovies & Primebox ---
+
 data class ResponseHash(
     @JsonProperty("embed_url") val embed_url: String,
     @JsonProperty("key") val key: String? = null,
