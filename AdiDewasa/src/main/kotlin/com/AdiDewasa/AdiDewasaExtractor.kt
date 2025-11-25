@@ -1,6 +1,5 @@
 package com.AdiDewasa
 
-// Import Extractor yang sudah kita siapkan sebelumnya
 import com.AdiDewasa.AdiDewasaExtractor.invokeAdiDewasaDirect
 import com.AdiDewasa.AdiDewasaExtractor.invokeIdlix
 import com.AdiDewasa.AdiDewasaExtractor.invokeMapple
@@ -29,10 +28,8 @@ class AdiDewasa : MainAPI() {
     override val hasDownloadSupport = true
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.AsianDrama)
 
-    // FITUR ANTI-BLOKIR
     private val cfInterceptor by lazy { CloudflareKiller() }
     
-    // Header Wajib agar tidak dianggap bot
     private val webHeaders = mapOf(
         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Accept" to "application/json, text/plain, */*",
@@ -70,7 +67,6 @@ class AdiDewasa : MainAPI() {
 
             val payload = jsonPayload.toRequestBody("application/json".toMediaType())
 
-            // Gunakan Interceptor CloudflareKiller
             val response = app.post(
                 "$mainUrl/api/filter", 
                 requestBody = payload, 
@@ -118,7 +114,6 @@ class AdiDewasa : MainAPI() {
     }
 
     override suspend fun load(url: String): LoadResponse {
-        // Load halaman menggunakan Cloudflare Killer
         val document = app.get(url, headers = webHeaders, interceptor = cfInterceptor).document
         
         val title = document.selectFirst("h1.heading-title, .film-info h1")?.text()?.trim() ?: "Unknown"
@@ -134,14 +129,13 @@ class AdiDewasa : MainAPI() {
             if (epNum == null) return@mapNotNull null
             
             newEpisode(
-                // PENTING: Kita passing LinkData ke loadLinks agar punya info lengkap
                 LinkData(
                     url = fixUrl(href),
                     title = title,
                     year = year,
                     season = 1,
                     episode = epNum
-                ).toJson() // Serialisasi ke String
+                ).toJson()
             ) {
                 this.name = "Episode $epNum"
                 this.episode = epNum
@@ -155,7 +149,6 @@ class AdiDewasa : MainAPI() {
                 this.year = year
             }
         } else {
-            // Untuk Movie
             newMovieLoadResponse(title, url, TvType.Movie, LinkData(url, title, year).toJson()) {
                 this.posterUrl = poster
                 this.plot = desc
@@ -171,15 +164,10 @@ class AdiDewasa : MainAPI() {
         callback: (ExtractorLink) -> Unit
     ): Boolean {
         
-        // Parse kembali data LinkData
         val res = parseJson<LinkData>(data)
 
-        // JALANKAN SEMUA EXTRACTOR SECARA PARALEL
         runAllAsync(
-            // 1. Player Internal Dramafull (Paling Akurat)
             { invokeAdiDewasaDirect(res.url, callback, subtitleCallback) },
-            
-            // 2. Extractor Cadangan (Idlix, Vidsrc, dll)
             { invokeIdlix(res.title, res.year, res.season, res.episode, subtitleCallback, callback) },
             { invokeVidsrc(null, res.season, res.episode, subtitleCallback, callback) },
             { invokeXprime(null, res.title, res.year, res.season, res.episode, subtitleCallback, callback) },
