@@ -3,7 +3,10 @@ package com.AdiDewasa
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.newExtractorLink
+import com.lagradost.cloudstream3.utils.ExtractorLinkType // <-- PERBAIKAN: Import ditambahkan
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
+import com.lagradost.cloudstream3.utils.AppUtils.toJson
+import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
@@ -48,7 +51,6 @@ class AdiDewasa : MainAPI() {
             val payload = jsonPayload.toRequestBody("application/json".toMediaType())
             val response = app.post("$mainUrl/api/filter", requestBody = payload)
             
-            // Menggunakan tryParseJson agar tidak crash jika format berubah
             val homeResponse = response.parsedSafe<HomeResponse>()
             
             if (homeResponse?.success == false) {
@@ -92,18 +94,14 @@ class AdiDewasa : MainAPI() {
         }
     }
 
-    // --- BAGIAN PENTING: Perbaikan Fungsi Load ---
     override suspend fun load(url: String): LoadResponse {
         val response = app.get(url)
         val document = response.document
 
-        // 1. Ambil Metadata dari Meta Tags (Lebih Stabil daripada Selector CSS biasa)
         val ogTitle = document.select("meta[property=og:title]").attr("content")
         val fallbackTitle = document.selectFirst("h1")?.text() ?: "Unknown Title"
         val rawTitle = if (ogTitle.isNotEmpty()) ogTitle else fallbackTitle
 
-        // 2. Title Cleaner: Membersihkan judul dari sampah "Watch... subbed..."
-        // Contoh: "Watch Eva - Movie subbed online..." -> Menjadi "Eva"
         val title = rawTitle
             .replace(Regex("(?i)^Watch\\s+"), "")
             .substringBefore(" - Movie")
@@ -114,13 +112,11 @@ class AdiDewasa : MainAPI() {
         val poster = document.select("meta[property=og:image]").attr("content")
         val desc = document.select("meta[property=og:description]").attr("content")
         
-        // 3. Ambil Tahun & Genre
         var year = Regex("\\d{4}").find(title)?.value?.toIntOrNull()
         if (year == null) year = Regex("\\d{4}").find(document.text())?.value?.toIntOrNull()
         
         val tags = document.select("div.genre-list a, .genres a").map { it.text() }
 
-        // 4. Deteksi Episode
         val episodes = document.select(".episode-list a, .episode-item a, ul.episodes li a").mapNotNull {
             val text = it.text()
             val href = it.attr("href")
@@ -135,7 +131,6 @@ class AdiDewasa : MainAPI() {
             }
         }
 
-        // 5. Rekomendasi
         val recommendations = document.select("div.film_list-wrap div.flw-item").mapNotNull {
             val recTitle = it.select("h3.film-name a").text()
             val recHref = it.select("h3.film-name a").attr("href")
@@ -146,10 +141,7 @@ class AdiDewasa : MainAPI() {
             }
         }
 
-        // 6. Return Data yang Benar
         val tvType = if (episodes.isNotEmpty()) TvType.TvSeries else TvType.Movie
-        
-        // Untuk Movie, kita kirim URL halaman ini lagi ke loadLinks agar diproses
         val dataUrl = if (tvType == TvType.Movie) url else ""
 
         return if (tvType == TvType.TvSeries) {
@@ -177,19 +169,16 @@ class AdiDewasa : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
-        // Data adalah URL halaman film
         if (data.isEmpty()) return false
 
         try {
             val doc = app.get(data).document
             
-            // Mencari variabel signedUrl di dalam script
             val allScripts = doc.select("script").joinToString(" ") { it.data() }
             val signedUrl = Regex("""(window\.)?signedUrl\s*=\s*["']([^"']+)["']""").find(allScripts)
                 ?.groupValues?.lastOrNull()?.replace("\\/", "/") 
                 ?: return false
             
-            // Request ke API Player internal
             val jsonText = app.get(
                 signedUrl, 
                 referer = data,
@@ -198,26 +187,26 @@ class AdiDewasa : MainAPI() {
             
             val json = JSONObject(jsonText)
             
-            // Ambil Video Source
             val videoSource = json.optJSONObject("video_source") ?: return false
             val qualities = videoSource.keys().asSequence().toList()
             
-            qualities.forEach { quality ->
-                val link = videoSource.optString(quality)
+            qualities.forEach { qualityStr ->
+                val link = videoSource.optString(qualityStr)
+                val qualityInt = qualityStr.toIntOrNull() ?: Qualities.Unknown.value
+
                 if (link.isNotEmpty()) {
                     callback.invoke(
                         newExtractorLink(
                             this.name,
-                            "AdiDewasa $quality",
+                            "AdiDewasa $qualityStr",
                             link,
                             ExtractorLinkType.M3U8,
-                            quality = quality.toIntOrNull() ?:0
+                            qualityInt // <-- PERBAIKAN: Menggunakan positional argument, bukan named argument
                         )
                     )
                 }
             }
 
-            // Ambil Subtitle
             val subJson = json.optJSONObject("sub")
             val bestQuality = qualities.maxByOrNull { it.toIntOrNull() ?: 0 }
             if (bestQuality != null) {
