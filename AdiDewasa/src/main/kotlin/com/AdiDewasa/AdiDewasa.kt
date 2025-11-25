@@ -7,7 +7,6 @@ import com.AdiDewasa.AdiDewasaExtractor.invokeSuperembed
 import com.AdiDewasa.AdiDewasaExtractor.invokeVidfast
 import com.AdiDewasa.AdiDewasaExtractor.invokeVidlink
 import com.AdiDewasa.AdiDewasaExtractor.invokeVidsrc
-import com.AdiDewasa.AdiDewasaExtractor.invokeVidsrccc
 import com.AdiDewasa.AdiDewasaExtractor.invokeVixsrc
 import com.AdiDewasa.AdiDewasaExtractor.invokeWyzie
 import com.AdiDewasa.AdiDewasaExtractor.invokeXprime
@@ -15,124 +14,171 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.network.CloudflareKiller
-import org.jsoup.nodes.Element
-import java.net.URLEncoder
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 
 class AdiDewasa : MainAPI() {
-    override var name = "AdiDewasa"
     override var mainUrl = "https://dramafull.cc"
-    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.AsianDrama)
-    override var lang = "id"
+    override var name = "AdiDewasa"
     override val hasMainPage = true
     override val hasQuickSearch = true
+    override val hasChromecastSupport = true
+    override val hasDownloadSupport = true
+    override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries, TvType.AsianDrama)
 
-    // FITUR PENTING: Penembus Cloudflare
+    // Interceptor untuk menembus Cloudflare
     private val cfInterceptor by lazy { CloudflareKiller() }
 
-    // Header browser untuk menyamar
+    // Header browser lengkap agar tidak diblokir
     private val webHeaders = mapOf(
         "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-        "Accept-Language" to "en-US,en;q=0.5",
+        "Accept" to "application/json, text/plain, */*",
+        "Accept-Language" to "en-US,en;q=0.9",
+        "Origin" to mainUrl,
         "Referer" to "$mainUrl/"
     )
 
-    override val mainPage = mainPageOf(
-        "$mainUrl/movies" to "Latest Movies",
-        "$mainUrl/popular" to "Popular",
-        "$mainUrl/genre/romance" to "Romance",
-        "$mainUrl/genre/drama" to "Drama",
-        "$mainUrl/genre/action" to "Action"
-    )
+    // Menggunakan Kategori dari File Asli (API Based)
+    override val mainPage: List<MainPageData>
+        get() = listOf(
+            MainPageData("Adult Movies - Baru Rilis", "2:1:adult"),
+            MainPageData("Adult Movies - Paling Populer", "2:5:adult"),
+            MainPageData("Adult Movies - Rating Tertinggi", "2:6:adult"),
+            MainPageData("Adult Movies - Sesuai Abjad (A-Z)", "2:3:adult"),
+            MainPageData("Adult Movies - Klasik (Oldest)", "2:2:adult"),
+            MainPageData("Adult TV Shows - Episode Baru", "1:1:adult"),
+            MainPageData("Adult TV Shows - Paling Populer", "1:5:adult"),
+            MainPageData("All Collections - Baru Ditambahkan", "-1:1:adult"),
+            MainPageData("All Collections - Paling Sering Ditonton", "-1:5:adult")
+        )
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
-        val url = if(page == 1) request.data else "${request.data}?page=$page"
-        
-        // REVISI: Menggunakan interceptor CloudflareKiller
-        val response = app.get(url, headers = webHeaders, interceptor = cfInterceptor)
-        val document = response.document
-        
-        // Scraping dengan selector yang lebih agresif
-        val home = document.select("div.item, .film-item, a.poster, .movie-item, .post-item").mapNotNull {
-            it.toSearchResult()
+        try {
+            // Logika API dari File Asli
+            val dataParts = request.data.split(":")
+            val type = dataParts.getOrNull(0) ?: "-1"
+            val sort = dataParts.getOrNull(1)?.toIntOrNull() ?: 1
+            val adultFlag = dataParts.getOrNull(2) ?: "normal"
+            val isAdultSection = adultFlag == "adult"
+
+            val jsonPayload = """{
+                "page": $page,
+                "type": "$type",
+                "country": -1,
+                "sort": $sort,
+                "adult": true,
+                "adultOnly": $isAdultSection,
+                "ignoreWatched": false,
+                "genres": [],
+                "keyword": ""
+            }""".trimIndent()
+
+            val payload = jsonPayload.toRequestBody("application/json".toMediaType())
+
+            // Menggunakan cfInterceptor untuk keamanan koneksi
+            val response = app.post(
+                "$mainUrl/api/filter", 
+                requestBody = payload, 
+                headers = webHeaders,
+                interceptor = cfInterceptor
+            )
+            
+            val homeResponse = response.parsedSafe<HomeResponse>()
+            val mediaList = homeResponse?.data ?: emptyList()
+            
+            val searchResults = mediaList.mapNotNull { it.toSearchResult() }
+
+            return newHomePageResponse(
+                list = HomePageList(
+                    name = request.name,
+                    list = searchResults,
+                    isHorizontalImages = false
+                ),
+                hasNext = homeResponse?.nextPageUrl != null
+            )
+        } catch (e: Exception) {
+            e.printStackTrace()
+            // Fallback kosong jika gagal
+            return newHomePageResponse(emptyList(), hasNext = false)
         }
-        
-        if (home.isEmpty()) {
-            throw ErrorLoadingException("Daftar kosong. Coba 'Buka di Peramban' dulu untuk verifikasi Cloudflare.")
-        }
-        
-        return newHomePageResponse(request.name, home)
     }
 
-    private fun Element.toSearchResult(): SearchResponse? {
-        val title = this.selectFirst(".title, h3, .name, .entry-title")?.text()?.trim() 
-            ?: this.attr("title").ifEmpty { null }
-            ?: return null
-        
-        var href = this.selectFirst("a")?.attr("href") ?: this.attr("href")
-        if (href.isEmpty()) return null
-        href = fixUrl(href)
+    // Helper untuk konversi data API ke SearchResponse
+    private fun MediaItem.toSearchResult(): SearchResponse? {
+        val itemTitle = this.title ?: this.name ?: return null
+        val itemSlug = this.slug ?: return null
+        // Menggunakan image atau poster, prioritaskan yang ada
+        val itemImage = this.image?.takeIf { it.isNotEmpty() } ?: this.poster
 
-        val imgTag = this.selectFirst("img")
-        val poster = imgTag?.attr("data-src") 
-            ?: imgTag?.attr("data-original") 
-            ?: imgTag?.attr("src")
+        val href = "$mainUrl/film/$itemSlug"
+        val posterUrl = if (!itemImage.isNullOrEmpty()) {
+            if (itemImage.startsWith("http")) itemImage else mainUrl + itemImage
+        } else null
 
-        val quality = this.selectFirst(".quality, .ep, .label, .ribbon")?.text()?.trim()
-
-        return newMovieSearchResponse(title, href, TvType.Movie) {
-            this.posterUrl = poster
-            if(quality != null) addQuality(quality)
+        return newMovieSearchResponse(itemTitle, href, TvType.Movie) {
+            this.posterUrl = posterUrl
         }
     }
-
-    override suspend fun quickSearch(query: String): List<SearchResponse>? = search(query)
 
     override suspend fun search(query: String): List<SearchResponse>? {
-        val cleanQuery = AdiDewasaHelper.normalizeQuery(query)
-        val encodedQuery = URLEncoder.encode(cleanQuery, "UTF-8")
-        val url = "$mainUrl/api/live-search/$encodedQuery"
-        
-        // Search API biasanya jarang kena Cloudflare, tapi kita pakai header JSON yang benar
-        return app.get(url, headers = AdiDewasaHelper.headers).parsedSafe<DramaFullSearchResponse>()?.data?.map {
-            newMovieSearchResponse(it.title ?: it.name ?: "", "$mainUrl/film/${it.slug}", TvType.Movie) {
-                this.posterUrl = it.image
-                this.year = it.year?.toIntOrNull()
-            }
+        // Menggunakan API Live Search dari file asli (Lebih Cepat)
+        val url = "$mainUrl/api/live-search/$query"
+        return try {
+            app.get(url, headers = webHeaders, interceptor = cfInterceptor)
+                .parsedSafe<ApiSearchResponse>()?.data?.mapNotNull { it.toSearchResult() }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            null
         }
     }
 
     override suspend fun load(url: String): LoadResponse {
-        // Load detail juga menggunakan interceptor Cloudflare
+        // Logika Scraping HTML (Gabungan)
         val document = app.get(url, headers = webHeaders, interceptor = cfInterceptor).document
         
-        val title = document.selectFirst("h1.heading-title, .film-info h1")?.text()?.trim() ?: "Unknown Title"
+        val title = document.selectFirst("h1.heading-title, .film-info h1, .right-info h1")?.text()?.trim() ?: "Unknown Title"
         val poster = document.selectFirst(".film-poster img, .poster img")?.attr("src")
-        val desc = document.selectFirst(".description, .film-desc, .story")?.text()?.trim()
+        val desc = document.selectFirst(".description, .film-desc, .story, p.summary-content")?.text()?.trim()
         val year = Regex("\\d{4}").find(document.text())?.value?.toIntOrNull()
         
+        // Deteksi Episode
         val episodes = document.select(".episode-list a, .episode-item a, ul.episodes li a").mapNotNull {
-            val epNum = Regex("(\\d+)").find(it.text())?.groupValues?.get(1)?.toIntOrNull()
+            val text = it.text()
             val href = it.attr("href")
+            // Regex ganda untuk menangkap "Episode 1" atau angka "1" saja
+            val epNum = Regex("""Episode\s*(\d+)""", RegexOption.IGNORE_CASE).find(text)?.groupValues?.get(1)?.toIntOrNull()
+                ?: Regex("""(\d+)""").find(text)?.groupValues?.get(1)?.toIntOrNull()
+            
             if (epNum == null) return@mapNotNull null
             
-            newEpisode(LinkData(fixUrl(href), title, year, 1, epNum)) {
+            newEpisode(LinkData(
+                url = fixUrl(href), // URL detail episode
+                title = title,      // Judul Series
+                year = year,
+                season = 1,
+                episode = epNum
+            )) {
                 this.name = "Episode $epNum"
                 this.episode = epNum
             }
         }
+
+        val tags = document.select("div.genre-list a, .genres a").map { it.text() }
 
         return if (episodes.isNotEmpty()) {
             newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
                 this.plot = desc
                 this.year = year
+                this.tags = tags
             }
         } else {
+            // Untuk Movie, LinkData berisi URL halaman ini sendiri
             newMovieLoadResponse(title, url, TvType.Movie, LinkData(url, title, year)) {
                 this.posterUrl = poster
                 this.plot = desc
                 this.year = year
+                this.tags = tags
             }
         }
     }
@@ -143,20 +189,46 @@ class AdiDewasa : MainAPI() {
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        
+        // Parsing data LinkData yang dikirim dari load()
         val res = parseJson<LinkData>(data)
 
+        // STRATEGI GABUNGAN: Internal Player + Eksternal Extractors
         runAllAsync(
-            { invokeAdiDewasaDirect(res.url, callback, subtitleCallback) },
-            { invokeIdlix(res.title, res.year, res.season, res.episode, subtitleCallback, callback) },
-            { invokeVidsrc(null, res.season, res.episode, subtitleCallback, callback) },
-            { invokeXprime(null, res.title, res.year, res.season, res.episode, subtitleCallback, callback) },
-            { invokeVidfast(null, res.season, res.episode, subtitleCallback, callback) },
-            { invokeVidlink(null, res.season, res.episode, callback) },
-            { invokeMapple(null, res.season, res.episode, subtitleCallback, callback) },
-            { invokeWyzie(null, res.season, res.episode, subtitleCallback) },
-            { invokeVixsrc(null, res.season, res.episode, callback) },
-            { invokeSuperembed(null, res.season, res.episode, subtitleCallback, callback) }
+            // 1. Player Internal Dramafull (Metode signedUrl dari file asli)
+            {
+                invokeAdiDewasaDirect(res.url, callback, subtitleCallback)
+            },
+            // 2. Extractor Cadangan (Metode AdiDrakor Modifikasi)
+            { 
+                invokeIdlix(res.title, res.year, res.season, res.episode, subtitleCallback, callback) 
+            },
+            { 
+                invokeVidsrc(null, res.season, res.episode, subtitleCallback, callback) 
+            },
+            { 
+                invokeXprime(null, res.title, res.year, res.season, res.episode, subtitleCallback, callback) 
+            },
+            { 
+                invokeVidfast(null, res.season, res.episode, subtitleCallback, callback) 
+            },
+            { 
+                invokeVidlink(null, res.season, res.episode, callback) 
+            },
+            { 
+                invokeMapple(null, res.season, res.episode, subtitleCallback, callback) 
+            },
+            { 
+                invokeWyzie(null, res.season, res.episode, subtitleCallback) 
+            },
+            { 
+                invokeVixsrc(null, res.season, res.episode, callback) 
+            },
+            { 
+                invokeSuperembed(null, res.season, res.episode, subtitleCallback, callback) 
+            }
         )
+
         return true
     }
 }
