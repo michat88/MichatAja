@@ -2,22 +2,44 @@ package com.AdiDewasa
 
 import com.fasterxml.jackson.annotation.JsonProperty
 
-// --- DRAMAFULL / ADIDEWASA MODELS ---
-data class DramaFullSearchResponse(
-    @JsonProperty("data") val data: ArrayList<DramaFullItem>? = arrayListOf(),
+// Model untuk Halaman Utama (Pagination Laravel)
+data class HomeResponse(
+    @JsonProperty("current_page") val currentPage: Int? = null,
+    @JsonProperty("data") val data: List<MediaItem>? = null,
+    @JsonProperty("next_page_url") val nextPageUrl: String? = null,
+    @JsonProperty("prev_page_url") val prevPageUrl: String? = null,
+    @JsonProperty("total") val total: Int? = null,
     @JsonProperty("success") val success: Boolean? = null
 )
 
-data class DramaFullItem(
+// Model untuk Item Film/Series
+data class MediaItem(
+    @JsonProperty("id") val id: Int? = null,
     @JsonProperty("name") val name: String? = null,
     @JsonProperty("title") val title: String? = null,
     @JsonProperty("slug") val slug: String? = null,
     @JsonProperty("image") val image: String? = null,
-    @JsonProperty("year") val year: String? = null,
-    @JsonProperty("id") val id: String? = null
+    @JsonProperty("poster") val poster: String? = null,
+    @JsonProperty("type") val type: String? = null,
+    @JsonProperty("year") val year: String? = null
 )
 
-// --- EXTRACTOR MODELS (Disalin dari AdiDrakor untuk kompatibilitas) ---
+// Model untuk Hasil Search API
+data class ApiSearchResponse(
+    @JsonProperty("data") val data: List<MediaItem>? = null,
+    @JsonProperty("success") val success: Boolean? = null
+)
+
+// Model LinkData untuk passing data antar fungsi load
+data class LinkData(
+    val url: String,
+    val title: String,
+    val year: Int? = null,
+    val season: Int? = null,
+    val episode: Int? = null
+)
+
+// Model-model untuk Extractor (Disalin dari AdiDrakor agar kompatibel)
 data class VixsrcSource(val name: String, val url: String, val referer: String)
 
 data class VidFastServers(
@@ -82,15 +104,4 @@ data class ResponseHash(
     @JsonProperty("embed_url") val embed_url: String,
     @JsonProperty("key") val key: String? = null,
     @JsonProperty("type") val type: String? = null,
-)
-
-// Data class untuk struktur link internal
-data class LinkData(
-    val url: String, // URL halaman asli Dramafull
-    val title: String,
-    val year: Int? = null,
-    val season: Int? = null,
-    val episode: Int? = null,
-    val tmdbId: Int? = null, // Opsional jika ketemu
-    val imdbId: String? = null
 )
