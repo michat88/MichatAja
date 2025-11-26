@@ -35,10 +35,8 @@ class Pusatfilm : MainAPI() {
         val title = this.selectFirst("h2.entry-title > a")?.text()?.trim() ?: return null
         val href = fixUrl(this.selectFirst("a")!!.attr("href"))
         val posterUrl = fixUrlNull(this.selectFirst("a > img")?.getImageAttr()).fixImageQuality()
-        val quality = this.select("div.gmr-qual, div.gmr-quality-item > a").text().trim().replace("-", "")
         
-        // PERBAIKAN: Default ke Movie kecuali URL mengandung /tv/
-        // Sebelumnya: if (quality.isEmpty()) -> Series (Ini penyebab bug!)
+        // Deteksi Series vs Movie berdasarkan URL (Lebih akurat untuk situs ini)
         val isSeries = href.contains("/tv/")
         
         return if (isSeries) {
@@ -48,6 +46,8 @@ class Pusatfilm : MainAPI() {
         } else {
             newMovieSearchResponse(title, href, TvType.Movie) {
                 this.posterUrl = posterUrl
+                // Kualitas biasanya ada di label, misal "Bluray"
+                val quality = this@toSearchResult.select("div.gmr-qual, div.gmr-quality-item > a").text().trim().replace("-", "")
                 addQuality(quality)
             }
         }
@@ -62,27 +62,36 @@ class Pusatfilm : MainAPI() {
         val document = app.get(url).document
 
         val title = document.selectFirst("h1.entry-title")?.text()?.trim() ?: "Unknown Title"
-        val poster = document.selectFirst("div.gmr-poster img")?.getImageAttr()?.fixImageQuality()
+        
+        // FIX GAMBAR: Mengambil dari og:image (meta tag) agar pasti muncul di detail
+        val poster = document.selectFirst("meta[property=og:image]")?.attr("content")?.fixImageQuality()
+            ?: document.selectFirst("div.gmr-poster img")?.getImageAttr()?.fixImageQuality()
+
         val tags = document.select("div.gmr-movie-genre a").map { it.text() }
         val year = document.selectFirst("div.gmr-movie-date a")?.text()?.toIntOrNull()
         val plot = document.selectFirst("div.entry-content p")?.text()?.trim()
         
-        // PERBAIKAN LOGIKA: Hanya anggap Series jika URL mengandung "/tv/"
-        // Menghapus pengecekan 'div.gmr-listseries' karena elemen itu sering bocor di halaman film.
         val isSeries = url.contains("/tv/")
 
         return if (isSeries) {
+            // FIX SERIES: Parsing episode lebih rapi dan diurutkan
             val episodes = document.select("div.gmr-listseries a").mapNotNull { eps ->
                 val href = fixUrl(eps.attr("href"))
-                val name = eps.attr("title")
-                val episodeMatch = Regex("Episode\\s*(\\d+)").find(name)
-                val episode = episodeMatch?.groupValues?.get(1)?.toIntOrNull()
+                val rawTitle = eps.attr("title") // Judul mentah "Nonton Series..."
                 
+                // Ambil angka episode menggunakan Regex
+                val episodeMatch = Regex("(?i)Episode\\s*(\\d+)").find(rawTitle)
+                val episodeNum = episodeMatch?.groupValues?.get(1)?.toIntOrNull()
+                
+                // Jika tidak ketemu angka episode, lewati (karena mungkin bukan link episode valid)
+                if (episodeNum == null) return@mapNotNull null
+
                 newEpisode(href) {
-                    this.name = name
-                    this.episode = episode
+                    this.name = "Episode $episodeNum" // Paksa nama jadi rapi
+                    this.episode = episodeNum
                 }
-            }
+            }.sortedBy { it.episode } // Urutkan episode dari 1 ke atas
+
             newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
                 this.year = year
@@ -107,7 +116,7 @@ class Pusatfilm : MainAPI() {
     ): Boolean {
         val document = app.get(data).document
         
-        // 1. Cek Dropdown Server (Metode Utama)
+        // 1. Cek Dropdown Server
         document.select("ul#dropdown-server li a").forEach {
             val encodedUrl = it.attr("data-frame")
             if (encodedUrl.isNotEmpty()) {
@@ -116,21 +125,12 @@ class Pusatfilm : MainAPI() {
             }
         }
         
-        // 2. Cek Iframe Langsung (Metode Cadangan)
+        // 2. Cek Iframe Utama
         document.select("div.gmr-embed-responsive iframe").forEach {
             val src = it.attr("src")
             if (src.isNotEmpty() && !src.contains("youtube")) {
                  loadExtractor(src, data, subtitleCallback, callback)
             }
-        }
-        
-        // 3. Fallback: Cek tombol download jika streaming tidak ada
-        // Kadang link streaming disembunyikan di tombol 'Global'
-        document.select("a.gmr-download-btn").forEach {
-             val href = it.attr("href")
-             if (href.contains("google") || href.contains("pixel")) {
-                  loadExtractor(href, data, subtitleCallback, callback)
-             }
         }
 
         return true
