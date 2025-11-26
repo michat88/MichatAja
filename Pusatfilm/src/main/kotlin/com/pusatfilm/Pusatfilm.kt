@@ -1,6 +1,7 @@
 package com.pusatfilm
 
 import com.lagradost.cloudstream3.*
+import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
 import org.jsoup.nodes.Element
@@ -13,6 +14,9 @@ class Pusatfilm : MainAPI() {
     override var lang = "id"
     override val supportedTypes =
         setOf(TvType.Movie, TvType.TvSeries, TvType.Anime, TvType.AsianDrama)
+
+    // API Key Publik TMDb (Bisa diganti jika limit habis)
+    private val tmdbApiKey = "90b62d85429816503f8489849206d4e2"
 
     override val mainPage = mainPageOf(
         "film-terbaru/page/%d/" to "Film Terbaru",
@@ -59,27 +63,40 @@ class Pusatfilm : MainAPI() {
     override suspend fun load(url: String): LoadResponse {
         val document = app.get(url).document
 
-        val title = document.selectFirst("h1.entry-title")?.text()?.trim() ?: "Unknown Title"
+        // 1. Ambil Data Dasar dari Pusatfilm
+        val rawTitle = document.selectFirst("h1.entry-title")?.text()?.trim() ?: "Unknown Title"
         
-        // FIX GAMBAR FINAL: Cek 4 sumber berbeda agar gambar pasti muncul
-        val poster = document.selectFirst("meta[property=og:image]")?.attr("content")?.fixImageQuality()
+        // Bersihkan tahun dari judul untuk pencarian TMDb (Misal: "Dune (2024)" -> "Dune")
+        val cleanTitleRegex = Regex("(.*?)\\s*\\(\\d{4}\\)")
+        val cleanTitle = cleanTitleRegex.find(rawTitle)?.groupValues?.get(1) ?: rawTitle
+        
+        val yearText = document.selectFirst("div.gmr-movie-date a")?.text()?.trim()
+        val year = yearText?.toIntOrNull()
+
+        // 2. Cari Data di TMDb (Untuk Poster HD, Background, & Info Akurat)
+        val isSeries = url.contains("/tv/")
+        val tmdbResult = getTmdbDetails(cleanTitle, year, isSeries)
+
+        // Prioritas Gambar: TMDb -> Metadata Web -> Web Poster -> Fallback
+        val poster = tmdbResult?.posterPath 
+            ?: document.selectFirst("meta[property=og:image]")?.attr("content")?.fixImageQuality()
             ?: document.selectFirst("div.gmr-poster img")?.getImageAttr()?.fixImageQuality()
-            ?: document.selectFirst("img.wp-post-image")?.getImageAttr()?.fixImageQuality()
-            ?: document.selectFirst("link[rel='image_src']")?.attr("href")?.fixImageQuality()
+        
+        val background = tmdbResult?.backdropPath
+            ?: document.selectFirst("meta[property=og:image]")?.attr("content")?.fixImageQuality()
+
+        val plot = tmdbResult?.overview 
+            ?: document.selectFirst("div.entry-content p")?.text()?.trim()
 
         val tags = document.select("div.gmr-movie-genre a").map { it.text() }
-        val year = document.selectFirst("div.gmr-movie-date a")?.text()?.toIntOrNull()
-        val plot = document.selectFirst("div.entry-content p")?.text()?.trim()
-        
-        val isSeries = url.contains("/tv/")
 
-        return if (isSeries) {
+        if (isSeries) {
             val episodes = document.select("div.gmr-listseries a").mapNotNull { eps ->
                 val href = fixUrl(eps.attr("href"))
-                val rawTitle = eps.attr("title") // Contoh: "Nonton Series Robin Hood Season 1 Episode 5..."
+                val epsTitle = eps.attr("title")
                 
-                // Regex fleksibel: Cari kata 'Episode' diikuti angka
-                val episodeMatch = Regex("(?i)Episode\\s*(\\d+)").find(rawTitle)
+                // Parsing Episode
+                val episodeMatch = Regex("(?i)Episode\\s*(\\d+)").find(epsTitle)
                 val episodeNum = episodeMatch?.groupValues?.get(1)?.toIntOrNull()
                 
                 if (episodeNum == null) return@mapNotNull null
@@ -87,24 +104,68 @@ class Pusatfilm : MainAPI() {
                 newEpisode(href) {
                     this.name = "Episode $episodeNum"
                     this.episode = episodeNum
+                    this.season = 1 // Default ke season 1 karena web ini jarang misah season
                 }
             }.sortedBy { it.episode }
 
-            newTvSeriesLoadResponse(title, url, TvType.TvSeries, episodes) {
+            return newTvSeriesLoadResponse(rawTitle, url, TvType.TvSeries, episodes) {
                 this.posterUrl = poster
+                this.backgroundPosterUrl = background
                 this.year = year
                 this.plot = plot
                 this.tags = tags
+                // PENTING: Attach TMDb ID biar Cloudstream bisa load Cast & Recommendations
+                this.tmdbId = tmdbResult?.id
             }
         } else {
-            newMovieLoadResponse(title, url, TvType.Movie, url) {
+            return newMovieLoadResponse(rawTitle, url, TvType.Movie, url) {
                 this.posterUrl = poster
+                this.backgroundPosterUrl = background
                 this.year = year
                 this.plot = plot
                 this.tags = tags
+                this.tmdbId = tmdbResult?.id
             }
         }
     }
+
+    // --- FUNGSI PENCARIAN TMDB ---
+    private suspend fun getTmdbDetails(title: String, year: Int?, isSeries: Boolean): TmdbResult? {
+        return try {
+            val type = if (isSeries) "tv" else "movie"
+            val searchUrl = "https://api.themoviedb.org/3/search/$type?api_key=$tmdbApiKey&query=$title&language=id-ID&page=1" +
+                    if (year != null) "&year=$year" else ""
+            
+            val response = app.get(searchUrl).text
+            val json = parseJson<TmdbSearchResponse>(response)
+            
+            val result = json.results.firstOrNull() ?: return null
+            
+            TmdbResult(
+                id = result.id,
+                posterPath = if (result.poster_path != null) "https://image.tmdb.org/t/p/w500${result.poster_path}" else null,
+                backdropPath = if (result.backdrop_path != null) "https://image.tmdb.org/t/p/original${result.backdrop_path}" else null,
+                overview = result.overview
+            )
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    // Class Data Sederhana untuk menampung hasil TMDb
+    data class TmdbSearchResponse(val results: List<TmdbItem>)
+    data class TmdbItem(
+        val id: Int,
+        val poster_path: String?,
+        val backdrop_path: String?,
+        val overview: String?
+    )
+    data class TmdbResult(
+        val id: Int,
+        val posterPath: String?,
+        val backdropPath: String?,
+        val overview: String?
+    )
 
     override suspend fun loadLinks(
         data: String,
@@ -114,7 +175,6 @@ class Pusatfilm : MainAPI() {
     ): Boolean {
         val document = app.get(data).document
         
-        // 1. Cek Dropdown
         document.select("ul#dropdown-server li a").forEach {
             val encodedUrl = it.attr("data-frame")
             if (encodedUrl.isNotEmpty()) {
@@ -123,7 +183,6 @@ class Pusatfilm : MainAPI() {
             }
         }
         
-        // 2. Cek Iframe
         document.select("div.gmr-embed-responsive iframe").forEach {
             val src = it.attr("src")
             if (src.isNotEmpty() && !src.contains("youtube")) {
