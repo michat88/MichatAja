@@ -73,7 +73,7 @@ class Pusatfilm : MainAPI() {
         val yearText = document.selectFirst("div.gmr-movie-date a")?.text()?.trim()
         val year = yearText?.toIntOrNull()
 
-        // 2. Cari Data di TMDb
+        // 2. Cari Data di TMDb (Untuk Poster HD & Background)
         val isSeries = url.contains("/tv/")
         val tmdbResult = getTmdbDetails(cleanTitle, year, isSeries)
 
@@ -114,8 +114,7 @@ class Pusatfilm : MainAPI() {
                 this.year = year
                 this.plot = plot
                 this.tags = tags
-                // PERBAIKAN: Menggunakan addTmdbId (huruf d kecil)
-                tmdbResult?.id?.let { addTmdbId(it.toString()) }
+                // addTmdbId dihapus agar aman dari error build
             }
         } else {
             return newMovieLoadResponse(rawTitle, url, TvType.Movie, url) {
@@ -124,8 +123,7 @@ class Pusatfilm : MainAPI() {
                 this.year = year
                 this.plot = plot
                 this.tags = tags
-                // PERBAIKAN: Menggunakan addTmdbId (huruf d kecil)
-                tmdbResult?.id?.let { addTmdbId(it.toString()) }
+                // addTmdbId dihapus agar aman dari error build
             }
         }
     }
