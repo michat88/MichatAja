@@ -2,8 +2,8 @@
 version = 2
 
 cloudstream {
-    // Tambahkan baris ini agar nama plugin jelas
-    name = "Pusatfilm" 
+    // Baris 'name' dihapus karena menyebabkan error. 
+    // Nama plugin akan otomatis diambil dari konfigurasi proyek.
     
     description = "Pusatfilm is a plugin that provides streaming links for movies and TV series."
     language = "id"
