@@ -2,7 +2,9 @@
 version = 2
 
 cloudstream {
-    // All of these properties are optional, you can safely remove them
+    // Tambahkan baris ini agar nama plugin jelas
+    name = "Pusatfilm" 
+    
     description = "Pusatfilm is a plugin that provides streaming links for movies and TV series."
     language = "id"
     authors = listOf("Hexated", "AdiMovies")
@@ -14,7 +16,7 @@ cloudstream {
      * 2: Slow
      * 3: Beta only
      * */
-    status = 1 // will be 3 if unspecified
+    status = 1 
     tvTypes = listOf(
         "AsianDrama",
         "TvSeries",
