@@ -37,7 +37,11 @@ class Pusatfilm : MainAPI() {
         val posterUrl = fixUrlNull(this.selectFirst("a > img")?.getImageAttr()).fixImageQuality()
         val quality = this.select("div.gmr-qual, div.gmr-quality-item > a").text().trim().replace("-", "")
         
-        return if (quality.isEmpty() || href.contains("/tv/")) {
+        // PERBAIKAN: Default ke Movie kecuali URL mengandung /tv/
+        // Sebelumnya: if (quality.isEmpty()) -> Series (Ini penyebab bug!)
+        val isSeries = href.contains("/tv/")
+        
+        return if (isSeries) {
             newAnimeSearchResponse(title, href, TvType.TvSeries) {
                 this.posterUrl = posterUrl
             }
@@ -63,15 +67,14 @@ class Pusatfilm : MainAPI() {
         val year = document.selectFirst("div.gmr-movie-date a")?.text()?.toIntOrNull()
         val plot = document.selectFirst("div.entry-content p")?.text()?.trim()
         
-        // LOGIKA BARU: Deteksi Series vs Movie yang lebih akurat
-        // Kita cek apakah ada daftar episode 'gmr-listseries' ATAU url mengandung '/tv/'
-        val isSeries = document.select("div.gmr-listseries").isNotEmpty() || url.contains("/tv/")
+        // PERBAIKAN LOGIKA: Hanya anggap Series jika URL mengandung "/tv/"
+        // Menghapus pengecekan 'div.gmr-listseries' karena elemen itu sering bocor di halaman film.
+        val isSeries = url.contains("/tv/")
 
         return if (isSeries) {
             val episodes = document.select("div.gmr-listseries a").mapNotNull { eps ->
                 val href = fixUrl(eps.attr("href"))
                 val name = eps.attr("title")
-                // Parsing episode lebih teliti
                 val episodeMatch = Regex("Episode\\s*(\\d+)").find(name)
                 val episode = episodeMatch?.groupValues?.get(1)?.toIntOrNull()
                 
@@ -104,7 +107,7 @@ class Pusatfilm : MainAPI() {
     ): Boolean {
         val document = app.get(data).document
         
-        // Cara 1: Cek dropdown server (biasanya ada data-frame terenkripsi base64)
+        // 1. Cek Dropdown Server (Metode Utama)
         document.select("ul#dropdown-server li a").forEach {
             val encodedUrl = it.attr("data-frame")
             if (encodedUrl.isNotEmpty()) {
@@ -113,19 +116,21 @@ class Pusatfilm : MainAPI() {
             }
         }
         
-        // Cara 2: Cek iframe langsung (jika tidak ada dropdown)
+        // 2. Cek Iframe Langsung (Metode Cadangan)
         document.select("div.gmr-embed-responsive iframe").forEach {
             val src = it.attr("src")
-            if (src.isNotEmpty()) {
+            if (src.isNotEmpty() && !src.contains("youtube")) {
                  loadExtractor(src, data, subtitleCallback, callback)
             }
         }
-
-        // Cara 3: Fallback khusus untuk link 'gdriveplayer' atau sejenisnya
-        val scripts = document.select("script").html()
-        // Kadang link ada di dalam script
-        if (scripts.contains("player.php")) {
-             // Logic tambahan jika diperlukan nanti
+        
+        // 3. Fallback: Cek tombol download jika streaming tidak ada
+        // Kadang link streaming disembunyikan di tombol 'Global'
+        document.select("a.gmr-download-btn").forEach {
+             val href = it.attr("href")
+             if (href.contains("google") || href.contains("pixel")) {
+                  loadExtractor(href, data, subtitleCallback, callback)
+             }
         }
 
         return true
