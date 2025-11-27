@@ -435,3 +435,22 @@ data class NepuSearch(
         @JsonProperty("type") val type: String? = null,
     )
 }
+
+// ================== CINEMAOS MODELS ==================
+data class CinemaOsSecretKeyRequest(
+    val tmdbId: String,
+    val seasonId: String,
+    val episodeId: String
+)
+
+data class CinemaOSReponse(
+    val data: CinemaOSReponseData,
+    val encrypted: Boolean,
+)
+
+data class CinemaOSReponseData(
+    val encrypted: String,
+    val cin: String,
+    val mao: String,
+    val salt: String,
+)
