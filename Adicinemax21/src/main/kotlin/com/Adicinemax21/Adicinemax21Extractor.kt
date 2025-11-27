@@ -992,7 +992,7 @@ object Adicinemax21Extractor : Adicinemax21() {
             val json = parseCinemaOSSources(decryptedJson.toString())
             
             // DAFTAR SERVER YANG DIBLOKIR
-            val blockedServers = listOf("Maphisto", "Noah", "Bolt", "Zeus", "Nexus", "Apollo", "Kratos")
+            val blockedServers = listOf("Maphisto", "Noah", "Bolt", "Zeus", "Nexus", "Apollo", "Kratos", "Flick", "Hollywood")
 
             json.forEach {
                 val serverName = it["server"] ?: ""
