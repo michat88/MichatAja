@@ -13,10 +13,11 @@ import okhttp3.Interceptor
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.jsoup.Jsoup
+import com.Adicinemax21.Adicinemax21.Companion.cinemaOSApi
 
 object Adicinemax21Extractor : Adicinemax21() {
 
-    // ================== ADIMOVIEBOX SOURCE (FIXED) ==================
+    // ================== ADIMOVIEBOX SOURCE ==================
     suspend fun invokeAdimoviebox(
         title: String,
         year: Int?,
@@ -28,7 +29,6 @@ object Adicinemax21Extractor : Adicinemax21() {
         val searchUrl = "https://moviebox.ph/wefeed-h5-bff/web/subject/search"
         val streamApi = "https://fmoviesunblocked.net"
         
-        // 1. Cari Film/Serial berdasarkan judul
         val searchBody = mapOf(
             "keyword" to title,
             "page" to 1,
@@ -39,43 +39,36 @@ object Adicinemax21Extractor : Adicinemax21() {
         val searchRes = app.post(searchUrl, requestBody = searchBody).text
         val items = tryParseJson<AdimovieboxSearch>(searchRes)?.data?.items ?: return
         
-        // 2. Filter hasil pencarian
         val matchedMedia = items.find { item ->
             val itemYear = item.releaseDate?.split("-")?.firstOrNull()?.toIntOrNull()
             (item.title.equals(title, true)) || 
             (item.title?.contains(title, true) == true && itemYear == year)
         } ?: return
 
-        // 3. Request Link Stream
         val subjectId = matchedMedia.subjectId ?: return
         val se = if (season == null) 0 else season
         val ep = if (episode == null) 0 else episode
         
         val playUrl = "$streamApi/wefeed-h5-bff/web/subject/play?subjectId=$subjectId&se=$se&ep=$ep"
-        // Referer spesifik yang benar (PENTING untuk menghindari error 3002)
         val validReferer = "$streamApi/spa/videoPlayPage/movies/${matchedMedia.detailPath}?id=$subjectId&type=/movie/detail&lang=en"
 
         val playRes = app.get(playUrl, referer = validReferer).text
         val streams = tryParseJson<AdimovieboxStreams>(playRes)?.data?.streams ?: return
 
-        // 4. Ekstrak Link Video
         streams.reversed().forEach { source ->
              callback.invoke(
                 newExtractorLink(
                     "Adimoviebox",
                     "Adimoviebox",
                     source.url ?: return@forEach,
-                    // FIX: Gunakan INFER_TYPE agar otomatis deteksi MP4/M3U8
                     INFER_TYPE 
                 ) {
-                    // FIX: Gunakan referer lengkap, bukan root domain
                     this.referer = validReferer
                     this.quality = getQualityFromName(source.resolutions)
                 }
             )
         }
 
-        // 5. Ekstrak Subtitle
         val id = streams.firstOrNull()?.id
         val format = streams.firstOrNull()?.format
         if (id != null) {
@@ -100,8 +93,8 @@ object Adicinemax21Extractor : Adicinemax21() {
     data class AdimovieboxCaptions(val data: AdimovieboxCaptionData?)
     data class AdimovieboxCaptionData(val captions: List<AdimovieboxCaptionItem>?)
     data class AdimovieboxCaptionItem(val lanName: String?, val url: String?)
-    // ================== END ADIMOVIEBOX SOURCE ==================
 
+    // ================== GOMOVIES SOURCE ==================
     suspend fun invokeGomovies(
         title: String? = null,
         year: Int? = null,
@@ -229,6 +222,7 @@ object Adicinemax21Extractor : Adicinemax21() {
 
     }
 
+    // ================== IDLIX SOURCE ==================
     suspend fun invokeIdlix(
         title: String? = null,
         year: Int? = null,
@@ -310,6 +304,7 @@ object Adicinemax21Extractor : Adicinemax21() {
         }
     }
 
+    // ================== VIDSRCCC SOURCE ==================
     suspend fun invokeVidsrccc(
         tmdbId: Int?,
         imdbId: String?,
@@ -412,6 +407,7 @@ object Adicinemax21Extractor : Adicinemax21() {
 
     }
 
+    // ================== VIDSRC SOURCE ==================
     suspend fun invokeVidsrc(
         imdbId: String?,
         season: Int?,
@@ -461,6 +457,7 @@ object Adicinemax21Extractor : Adicinemax21() {
 
     }
 
+    // ================== XPRIME SOURCE ==================
     suspend fun invokeXprime(
         tmdbId: Int?,
         title: String? = null,
@@ -530,6 +527,7 @@ object Adicinemax21Extractor : Adicinemax21() {
         )
     }
 
+    // ================== WATCHSOMUCH SOURCE ==================
     suspend fun invokeWatchsomuch(
         imdbId: String? = null,
         season: Int? = null,
@@ -572,6 +570,7 @@ object Adicinemax21Extractor : Adicinemax21() {
 
     }
 
+    // ================== MAPPLE SOURCE ==================
     suspend fun invokeMapple(
         tmdbId: Int?,
         season: Int?,
@@ -633,6 +632,7 @@ object Adicinemax21Extractor : Adicinemax21() {
 
     }
 
+    // ================== VIDLINK SOURCE ==================
     suspend fun invokeVidlink(
         tmdbId: Int?,
         season: Int?,
@@ -665,6 +665,7 @@ object Adicinemax21Extractor : Adicinemax21() {
 
     }
 
+    // ================== VIDFAST SOURCE ==================
     suspend fun invokeVidfast(
         tmdbId: Int?,
         season: Int?,
@@ -717,6 +718,7 @@ object Adicinemax21Extractor : Adicinemax21() {
 
     }
 
+    // ================== WYZIE SOURCE ==================
     suspend fun invokeWyzie(
         tmdbId: Int?,
         season: Int?,
@@ -742,6 +744,7 @@ object Adicinemax21Extractor : Adicinemax21() {
 
     }
 
+    // ================== VIXSRC SOURCE ==================
     suspend fun invokeVixsrc(
         tmdbId: Int?,
         season: Int?,
@@ -791,6 +794,7 @@ object Adicinemax21Extractor : Adicinemax21() {
 
     }
 
+    // ================== VIDSRCCX SOURCE ==================
     suspend fun invokeVidsrccx(
         tmdbId: Int?,
         season: Int?,
@@ -821,6 +825,7 @@ object Adicinemax21Extractor : Adicinemax21() {
 
     }
 
+    // ================== SUPEREMBED SOURCE ==================
     suspend fun invokeSuperembed(
         tmdbId: Int?,
         season: Int?,
@@ -878,6 +883,7 @@ object Adicinemax21Extractor : Adicinemax21() {
 
     }
 
+    // ================== VIDROCK SOURCE ==================
     suspend fun invokeVidrock(
         tmdbId: Int?,
         season: Int?,
@@ -940,6 +946,80 @@ object Adicinemax21Extractor : Adicinemax21() {
             )
         }
 
+    }
+
+    // ================== CINEMAOS SOURCE (NEW) ==================
+    suspend fun invokeCinemaOS(
+        imdbId: String? = null,
+        tmdbId: Int? = null,
+        title: String? = null,
+        season: Int? = null,
+        episode: Int? = null,
+        year: Int? = null,
+        callback: (ExtractorLink) -> Unit,
+        subtitleCallback: (SubtitleFile) -> Unit,
+    ) {
+        val sourceHeaders = mapOf(
+            "Accept" to "*/*",
+            "Accept-Language" to "en-US,en;q=0.9",
+            "Referer" to cinemaOSApi,
+            "Origin" to cinemaOSApi,
+            "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+            "sec-ch-ua" to "\"Google Chrome\";v=\"123\", \"Not:A-Brand\";v=\"8\", \"Chromium\";v=\"123\"",
+            "sec-ch-ua-mobile" to "?0",
+            "sec-ch-ua-platform" to "\"Windows\"",
+            "Content-Type" to "application/json"
+        )
+
+        val fixTitle = title?.replace(" ", "+")
+        val cinemaOsSecretKeyRequest = CinemaOsSecretKeyRequest(
+            tmdbId = tmdbId.toString(), 
+            seasonId = season?.toString() ?: "", 
+            episodeId = episode?.toString() ?: ""
+        )
+        val secretHash = cinemaOSGenerateHash(cinemaOsSecretKeyRequest, season != null)
+        val type = if (season == null) "movie" else "tv"
+        
+        val sourceUrl = if (season == null) {
+            "$cinemaOSApi/api/fuckit?type=$type&tmdbId=$tmdbId&imdbId=$imdbId&t=$fixTitle&ry=$year&secret=$secretHash"
+        } else {
+            "$cinemaOSApi/api/fuckit?type=$type&tmdbId=$tmdbId&imdbId=$imdbId&seasonId=$season&episodeId=$episode&t=$fixTitle&ry=$year&secret=$secretHash"
+        }
+
+        try {
+            val sourceResponse = app.get(sourceUrl, headers = sourceHeaders, timeout = 60).parsedSafe<CinemaOSReponse>()
+            val decryptedJson = cinemaOSDecryptResponse(sourceResponse?.data)
+            val json = parseCinemaOSSources(decryptedJson.toString())
+            
+            json.forEach {
+                val extractorLinkType = when {
+                    it["type"]?.contains("hls", true) == true -> ExtractorLinkType.M3U8
+                    it["type"]?.contains("dash", true) == true -> ExtractorLinkType.DASH
+                    it["type"]?.contains("mp4", true) == true -> ExtractorLinkType.VIDEO
+                    else -> ExtractorLinkType.INFER
+                }
+                
+                val quality = if (it["quality"]?.isNotEmpty() == true && it["quality"]?.toIntOrNull() != null) {
+                    getQualityFromName(it["quality"])
+                } else {
+                    Qualities.P1080.value
+                }
+
+                callback.invoke(
+                    newExtractorLink(
+                        "CinemaOS [${it["server"]}]",
+                        "CinemaOS [${it["server"]}] ${it["bitrate"]}",
+                        url = it["url"].toString(),
+                        type = extractorLinkType
+                    ) {
+                        this.headers = mapOf("Referer" to cinemaOSApi)
+                        this.quality = quality
+                    }
+                )
+            }
+        } catch (e: Exception) {
+            // Error handling (Silent fail agar tidak mengganggu provider lain)
+        }
     }
 
 }
