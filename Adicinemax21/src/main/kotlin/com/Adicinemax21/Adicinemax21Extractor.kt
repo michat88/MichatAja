@@ -948,7 +948,7 @@ object Adicinemax21Extractor : Adicinemax21() {
 
     }
 
-    // ================== CINEMAOS SOURCE (NEW) ==================
+    // ================== CINEMAOS SOURCE (NEW & UPDATED) ==================
     suspend fun invokeCinemaOS(
         imdbId: String? = null,
         tmdbId: Int? = null,
@@ -992,7 +992,7 @@ object Adicinemax21Extractor : Adicinemax21() {
             val json = parseCinemaOSSources(decryptedJson.toString())
             
             // DAFTAR SERVER YANG DIBLOKIR
-            val blockedServers = listOf("Maphisto", "Noah", "Bolt", "Zeus", "Nexus")
+            val blockedServers = listOf("Maphisto", "Noah", "Bolt", "Zeus", "Nexus", "Apollo")
 
             json.forEach {
                 val serverName = it["server"] ?: ""
