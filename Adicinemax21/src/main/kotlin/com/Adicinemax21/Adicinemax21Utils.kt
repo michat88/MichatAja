@@ -11,14 +11,21 @@ import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.nicehttp.RequestBodyTypes
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
 import java.net.*
+import java.nio.charset.StandardCharsets
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
 import java.util.*
 import javax.crypto.Cipher
+import javax.crypto.Mac
+import javax.crypto.SecretKeyFactory
+import javax.crypto.spec.GCMParameterSpec
 import javax.crypto.spec.IvParameterSpec
+import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
-import kotlin.text.isLowerCase // Diperlukan untuk replaceFirstChar
+import kotlin.math.max
+import kotlin.text.isLowerCase
 
 var gomoviesCookies: Map<String, String>? = null
 
@@ -320,21 +327,14 @@ fun getFDoviesQuality(str: String): String {
     }
 }
 
-/**
- * Fungsi pembantu untuk mengkonversi kode bahasa dua huruf ke nama bahasa.
- * Menggantikan SubtitleHelper.fromTwoLettersToLanguage yang sudah deprecated
- * dan menggunakan replaceFirstChar untuk menghindari String.capitalize() yang deprecated.
- */
 fun getLanguageNameFromCode(code: String?): String? {
-    // Ambil hanya kode dua huruf pertama sebelum "_"
     return code?.split("_")?.first()?.let { langCode ->
         try {
-            // Gunakan Locale untuk mendapatkan nama bahasa yang dilokalkan
             Locale(langCode).displayLanguage.replaceFirstChar {
                 if (it.isLowerCase()) it.titlecase(Locale.getDefault()) else it.toString()
             }
         } catch (e: Exception) {
-            langCode // Fallback ke kode jika terjadi kesalahan
+            langCode
         }
     }
 }
@@ -343,7 +343,6 @@ fun getVipLanguage(str: String): String {
     return when (str) {
         "in_ID" -> "Indonesian"
         "pt" -> "Portuguese"
-        // Memperbaiki peringatan deprecation SubtitleHelper
         else -> str.split("_").first().let { code ->
             getLanguageNameFromCode(code) ?: code
         }
@@ -351,7 +350,6 @@ fun getVipLanguage(str: String): String {
 }
 
 fun fixCrunchyrollLang(language: String?): String? {
-    // Memperbaiki peringatan deprecation SubtitleHelper
     val langCode = language?.split("_")?.first()
     return getLanguageNameFromCode(langCode)
         ?: getLanguageNameFromCode(langCode?.substringBefore("-"))
@@ -462,6 +460,8 @@ private enum class Symbol(val decimalValue: Int) {
     }
 }
 
+// ================== UTILS ASLI ==================
+
 object VidrockHelper {
     private const val Ww = "x7k9mPqT2rWvY8zA5bC3nF6hJ2lK4mN9"
 
@@ -502,4 +502,117 @@ object VidsrcHelper {
         return base64UrlEncode(encrypted)
     }
 
+}
+
+// ================== CINEMAOS HELPER ==================
+
+fun generateHashedString(): String {
+    val s = "a8f7e9c2d4b6a1f3e8c9d2t4a7f6e9c2d4z6a1f3e8c9d2b4a7f5e9c2d4b6a1f3"
+    val a = "2"
+    val algorithm = "HmacSHA512"
+    val keySpec = SecretKeySpec(s.toByteArray(StandardCharsets.UTF_8), algorithm)
+    val mac = Mac.getInstance(algorithm)
+    mac.init(keySpec)
+
+    val input = "crypto_rotation_v${a}_seed_2025"
+    val hmacBytes = mac.doFinal(input.toByteArray(StandardCharsets.UTF_8))
+    val hex = hmacBytes.joinToString("") { "%02x".format(it) }
+
+    val repeated = hex.repeat(3)
+    val result = repeated.substring(0, max(s.length, 128))
+
+    return result
+}
+
+fun cinemaOSGenerateHash(t: CinemaOsSecretKeyRequest, isSeries: Boolean): String {
+    val c = generateHashedString()
+    val m: String = if (isSeries) "content_v3::contentId=${t.tmdbId}::partId=${t.episodeId}::seriesId=${t.seasonId}::environment=production" else "content_v3::contentId=${t.tmdbId}::environment=production"
+
+    val hmac384 = Mac.getInstance("HmacSHA384")
+    hmac384.init(SecretKeySpec(c.toByteArray(Charsets.UTF_8), "HmacSHA384"))
+    hmac384.update(m.toByteArray(Charsets.UTF_8))
+    val x = hmac384.doFinal().joinToString("") { "%02x".format(it) }
+
+    val hmac512 = Mac.getInstance("HmacSHA512")
+    hmac512.init(SecretKeySpec(x.toByteArray(Charsets.UTF_8), "HmacSHA512"))
+    hmac512.update(c.takeLast(64).toByteArray(Charsets.UTF_8))
+    val finalDigest = hmac512.doFinal().joinToString("") { "%02x".format(it) }
+
+    return finalDigest
+}
+
+fun cinemaOSDecryptResponse(e: CinemaOSReponseData?): Any {
+    val encrypted = e?.encrypted
+    val cin = e?.cin
+    val mao = e?.mao
+    val salt = e?.salt
+
+    val keyBytes = "a1b2c3d4e4f6477658455678901477567890abcdef1234567890abcdef123456".toByteArray()
+    val ivBytes = hexStringToByteArray(cin.toString())
+    val authTagBytes = hexStringToByteArray(mao.toString())
+    val encryptedBytes = hexStringToByteArray(encrypted.toString())
+    val saltBytes = hexStringToByteArray(salt.toString())
+
+    val factory = SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+    val spec = PBEKeySpec(keyBytes.map { it.toInt().toChar() }.toCharArray(), saltBytes, 100000, 256)
+    val tmp = factory.generateSecret(spec)
+    val key = SecretKeySpec(tmp.encoded, "AES")
+
+    val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+    val gcmSpec = GCMParameterSpec(128, ivBytes)
+    cipher.init(Cipher.DECRYPT_MODE, key, gcmSpec)
+    val decryptedBytes = cipher.doFinal(encryptedBytes + authTagBytes)
+    
+    return String(decryptedBytes)
+}
+
+fun hexStringToByteArray(hex: String): ByteArray {
+    val len = hex.length
+    require(len % 2 == 0) { "Hex string must have even length" }
+    val data = ByteArray(len / 2)
+    var i = 0
+    while (i < len) {
+        data[i / 2] = ((Character.digit(hex[i], 16) shl 4) + Character.digit(hex[i + 1], 16)).toByte()
+        i += 2
+    }
+    return data
+}
+
+fun parseCinemaOSSources(jsonString: String): List<Map<String, String>> {
+    val json = JSONObject(jsonString)
+    val sourcesObject = json.getJSONObject("sources")
+    val sourcesList = mutableListOf<Map<String, String>>()
+
+    val keys = sourcesObject.keys()
+    while (keys.hasNext()) {
+        val key = keys.next()
+        val source = sourcesObject.getJSONObject(key)
+
+        if (source.has("qualities")) {
+            val qualities = source.getJSONObject("qualities")
+            val qualityKeys = qualities.keys()
+            while (qualityKeys.hasNext()) {
+                val qualityKey = qualityKeys.next()
+                val qualityObj = qualities.getJSONObject(qualityKey)
+                val sourceMap = mutableMapOf<String, String>()
+                sourceMap["server"] = source.optString("server", key)
+                sourceMap["url"] = qualityObj.optString("url", "")
+                sourceMap["type"] = qualityObj.optString("type", "")
+                sourceMap["speed"] = source.optString("speed", "")
+                sourceMap["bitrate"] = source.optString("bitrate", "")
+                sourceMap["quality"] = qualityKey
+                sourcesList.add(sourceMap)
+            }
+        } else {
+            val sourceMap = mutableMapOf<String, String>()
+            sourceMap["server"] = source.optString("server", key)
+            sourceMap["url"] = source.optString("url", "")
+            sourceMap["type"] = source.optString("type", "")
+            sourceMap["speed"] = source.optString("speed", "")
+            sourceMap["bitrate"] = source.optString("bitrate", "")
+            sourceMap["quality"] = source.optString("quality", "")
+            sourcesList.add(sourceMap)
+        }
+    }
+    return sourcesList
 }
