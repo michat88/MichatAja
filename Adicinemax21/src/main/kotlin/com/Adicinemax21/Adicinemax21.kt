@@ -1,6 +1,7 @@
 package com.Adicinemax21
 
 import com.fasterxml.jackson.annotation.JsonProperty
+import com.Adicinemax21.Adicinemax21Extractor.invokeAdiDewasa // NEW: Import AdiDewasa
 import com.Adicinemax21.Adicinemax21Extractor.invokeAdimoviebox
 import com.Adicinemax21.Adicinemax21Extractor.invokeGomovies
 import com.Adicinemax21.Adicinemax21Extractor.invokeIdlix
@@ -15,7 +16,7 @@ import com.Adicinemax21.Adicinemax21Extractor.invokeWatchsomuch
 import com.Adicinemax21.Adicinemax21Extractor.invokeWyzie
 import com.Adicinemax21.Adicinemax21Extractor.invokeXprime
 import com.Adicinemax21.Adicinemax21Extractor.invokeCinemaOS
-import com.Adicinemax21.Adicinemax21Extractor.invokePlayer4U // Import Player4U
+import com.Adicinemax21.Adicinemax21Extractor.invokePlayer4U
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.metaproviders.TmdbProvider
@@ -67,7 +68,7 @@ open class Adicinemax21 : TmdbProvider() {
         const val superembedAPI = "https://multiembed.mov"
         const val vidrockAPI = "https://vidrock.net"
         const val cinemaOSApi = "https://cinemaos.tech"
-        const val Player4uApi = "https://player4u.xyz" // Konstanta Player4U
+        const val Player4uApi = "https://player4u.xyz"
 
         fun getType(t: String?): TvType {
             return when (t) {
@@ -340,7 +341,18 @@ open class Adicinemax21 : TmdbProvider() {
         val res = parseJson<LinkData>(data)
 
         runAllAsync(
-            // 0. Adimoviebox (NEW - Prioritas Tertinggi karena Direct Source)
+            // 0. AdiDewasa (NEW from AdiDrakor - High Priority)
+            {
+                invokeAdiDewasa(
+                    res.title ?: return@runAllAsync,
+                    res.year,
+                    res.season,
+                    res.episode,
+                    subtitleCallback,
+                    callback
+                )
+            },
+            // 1. Adimoviebox (Direct Source)
             {
                 invokeAdimoviebox(
                     res.title ?: return@runAllAsync,
@@ -351,7 +363,7 @@ open class Adicinemax21 : TmdbProvider() {
                     callback
                 )
             },
-            // 1. JeniusPlay (Prioritas #2 via Idlix)
+            // 2. JeniusPlay (via Idlix)
             {
                 invokeIdlix(
                     res.title,
@@ -362,11 +374,11 @@ open class Adicinemax21 : TmdbProvider() {
                     callback
                 )
             },
-            // 2. Vidlink (Prioritas #3)
+            // 3. Vidlink
             {
                 invokeVidlink(res.id, res.season, res.episode, callback)
             },
-            // 3. Vidplay (Prioritas #4 via Vidsrccc)
+            // 4. Vidplay (via Vidsrccc)
             {
                 invokeVidsrccc(
                     res.id,
@@ -377,11 +389,11 @@ open class Adicinemax21 : TmdbProvider() {
                     callback
                 )
             },
-            // 4. Vixsrc Alpha (Prioritas #5 via Vixsrc)
+            // 5. Vixsrc (Alpha)
             {
                 invokeVixsrc(res.id, res.season, res.episode, callback)
             },
-            // 5. CinemaOS (Baru Ditambahkan)
+            // 6. CinemaOS (Smart Filtered)
             {
                 invokeCinemaOS(
                     res.imdbId,
@@ -394,7 +406,7 @@ open class Adicinemax21 : TmdbProvider() {
                     subtitleCallback
                 )
             },
-            // 6. Player4U (Baru Ditambahkan)
+            // 7. Player4U
             {
                 if (!res.isAnime) invokePlayer4U(
                     res.title,
