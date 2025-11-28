@@ -4,10 +4,11 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.newExtractorLink
+import com.lagradost.cloudstream3.utils.INFER_TYPE // Import yang benar
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import com.lagradost.cloudstream3.runAllAsync // Untuk subtitle paralel
+import com.lagradost.cloudstream3.runAllAsync 
 
 class AdiDewasa : MainAPI() {
     override var mainUrl = "https://dramafull.cc"
@@ -114,6 +115,7 @@ class AdiDewasa : MainAPI() {
             val description = doc.selectFirst("div.right-info p.summary-content, .summary p")?.text() ?: ""
             
             val hasEpisodes = doc.select("div.tab-content.episode-button, .episodes-list").isNotEmpty()
+            
             // FIX: Bersihkan judul untuk pencarian subtitle nanti
             val cleanTitle = title.replace(Regex("""\(\d{4}\)"""), "").trim()
 
@@ -142,11 +144,11 @@ class AdiDewasa : MainAPI() {
                         newEpisode(epHref) {
                             this.name = "Episode ${epNum ?: epText}"
                             this.episode = epNum
-                            this.season = 1 // Default season 1
+                            this.season = 1 
                         }
                     } else null
                 }
-                // FIX: Menggunakan cleanTitle untuk LoadResponse
+                
                 return newTvSeriesLoadResponse(cleanTitle, url, TvType.TvSeries, episodes) {
                     this.year = year
                     this.tags = genre
@@ -197,8 +199,7 @@ class AdiDewasa : MainAPI() {
                         name,
                         name,
                         bestQualityUrl,
-                        // Menggunakan referensi eksplisit agar aman
-                        com.lagradost.cloudstream3.utils.ExtractorLinkType.INFER 
+                        INFER_TYPE // PERBAIKAN DI SINI (Menggunakan INFER_TYPE)
                     )
                 )
                 
@@ -213,7 +214,6 @@ class AdiDewasa : MainAPI() {
             }
 
             // --- BAGIAN 2: LOGIKA BARU SUBTITLE EKSTERNAL ---
-            // Kita ambil metadata lagi untuk pencarian subtitle
             val pageTitle = doc.selectFirst("h1.title")?.text() ?: ""
             val year = Regex("""\((\d{4})\)""").find(pageTitle)?.groupValues?.get(1)?.toIntOrNull()
             val cleanTitle = pageTitle.replace(Regex("""\(\d{4}\)"""), "").replace(Regex("Episode.*"), "").trim()
