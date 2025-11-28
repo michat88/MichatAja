@@ -454,8 +454,21 @@ data class CinemaOSReponseData(
     val salt: String,
 )
 
-// ================== PLAYER4U MODEL ==================
 data class Player4uLinkData(
     val name: String,
     val url: String,
+)
+
+// ================== ADIDEWASA MODEL (NEW) ==================
+data class AdiDewasaSearchResponse(
+    @JsonProperty("data") val data: ArrayList<AdiDewasaItem>? = arrayListOf(),
+    @JsonProperty("success") val success: Boolean? = null
+)
+
+data class AdiDewasaItem(
+    @JsonProperty("name") val name: String? = null,
+    @JsonProperty("title") val title: String? = null,
+    @JsonProperty("slug") val slug: String? = null,
+    @JsonProperty("image") val image: String? = null,
+    @JsonProperty("year") val year: String? = null 
 )
