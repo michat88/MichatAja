@@ -14,7 +14,8 @@ import com.Adicinemax21.Adicinemax21Extractor.invokeVixsrc
 import com.Adicinemax21.Adicinemax21Extractor.invokeWatchsomuch
 import com.Adicinemax21.Adicinemax21Extractor.invokeWyzie
 import com.Adicinemax21.Adicinemax21Extractor.invokeXprime
-import com.Adicinemax21.Adicinemax21Extractor.invokeCinemaOS // Import Ditambahkan
+import com.Adicinemax21.Adicinemax21Extractor.invokeCinemaOS
+import com.Adicinemax21.Adicinemax21Extractor.invokePlayer4U // Import Player4U
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.metaproviders.TmdbProvider
@@ -65,7 +66,8 @@ open class Adicinemax21 : TmdbProvider() {
         const val vidsrccxAPI = "https://vidsrc.cx"
         const val superembedAPI = "https://multiembed.mov"
         const val vidrockAPI = "https://vidrock.net"
-        const val cinemaOSApi = "https://cinemaos.tech" // Konstanta Ditambahkan
+        const val cinemaOSApi = "https://cinemaos.tech"
+        const val Player4uApi = "https://player4u.xyz" // Konstanta Player4U
 
         fun getType(t: String?): TvType {
             return when (t) {
@@ -390,6 +392,16 @@ open class Adicinemax21 : TmdbProvider() {
                     res.year,
                     callback,
                     subtitleCallback
+                )
+            },
+            // 6. Player4U (Baru Ditambahkan)
+            {
+                if (!res.isAnime) invokePlayer4U(
+                    res.title,
+                    res.season,
+                    res.episode,
+                    res.year,
+                    callback
                 )
             },
             // Sumber-sumber lain
