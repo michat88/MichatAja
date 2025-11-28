@@ -7,10 +7,11 @@ import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import java.util.Locale
 
 // Constants untuk API Subtitle & Helper
-const val SubtitlesAPI = "https://opensubtitles-v3.strem.io"
+// PERBAIKAN: Nama diganti agar tidak bentrok dengan Data Class
+const val OpenSubtitlesApiUrl = "https://opensubtitles-v3.strem.io"
 const val WyZIESUBAPI = "https://sub.wyzie.ru"
 const val tmdbAPI = "https://api.themoviedb.org/3"
-const val apiKey = "b030404650f279792a8d3287232358e3" // Menggunakan Key public umum
+const val apiKey = "b030404650f279792a8d3287232358e3" 
 
 // Helper untuk mendapatkan nama bahasa
 fun getLanguage(code: String): String {
@@ -22,13 +23,11 @@ fun getLanguage(code: String): String {
 }
 
 // Helper Pintar: Mencari IMDB ID berdasarkan Judul & Tahun via TMDB
-// Ini diperlukan karena API Subtitle butuh IMDB ID, tapi AdiDewasa cuma punya Judul.
 suspend fun getImdbIdFromTitle(title: String, year: Int?, type: TvType): String? {
     try {
         val searchType = if (type == TvType.Movie) "movie" else "tv"
         val query = title.replace(" ", "+")
         
-        // Logic tahun untuk pencarian lebih akurat
         val yearParam = if (year != null) {
             if (type == TvType.Movie) "&primary_release_year=$year" else "&first_air_date_year=$year"
         } else ""
@@ -58,11 +57,11 @@ suspend fun invokeSubtitleAPI(
 ) {
     if (imdbId == null) return
     
-    // Format URL berbeda untuk Movie dan TV
+    // PERBAIKAN: Menggunakan konstanta baru OpenSubtitlesApiUrl
     val url = if (season == null) {
-        "$SubtitlesAPI/subtitles/movie/$imdbId.json"
+        "$OpenSubtitlesApiUrl/subtitles/movie/$imdbId.json"
     } else {
-        "$SubtitlesAPI/subtitles/series/$imdbId:$season:$episode.json"
+        "$OpenSubtitlesApiUrl/subtitles/series/$imdbId:$season:$episode.json"
     }
 
     try {
@@ -102,7 +101,7 @@ suspend fun invokeWyZIESUBAPI(
         tryParseJson<List<WyZIESUB>>(res)?.forEach { sub ->
              subtitleCallback.invoke(
                 SubtitleFile(
-                    sub.display, // Biasanya format "English", "Indonesian", dll
+                    sub.display,
                     sub.url
                 )
             )
