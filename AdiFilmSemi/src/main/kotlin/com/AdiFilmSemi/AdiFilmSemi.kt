@@ -87,35 +87,21 @@ open class AdiFilmSemi : TmdbProvider() {
     }
 
     // Menggunakan filter bahasa Tagalog (tl) dan ID Cast Aktris Vivamax Populer
+    // Kategori dikurangi sesuai permintaan
     override val mainPage = mainPageOf(
-        // 1. Latest Release (Tagalog/Vivamax)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=tl&sort_by=primary_release_date.desc&include_adult=true" to "Vivamax Latest Release",
-        
-        // 2. Popular (Tagalog/Vivamax)
+        // 1. Popular (Tagalog/Vivamax)
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=tl&sort_by=popularity.desc&include_adult=true" to "Vivamax Popular",
         
-        // 3. Angeli Khang Specials (ID: 3194176)
+        // 2. Angeli Khang Specials (ID: 3194176)
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_cast=3194176&sort_by=primary_release_date.desc&include_adult=true" to "Angeli Khang Specials",
         
-        // 4. Azi Acosta Specials (ID: 3236063)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_cast=3236063&sort_by=primary_release_date.desc&include_adult=true" to "Azi Acosta Specials",
-        
-        // 5. AJ Raval Specials (ID: 2472223)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_cast=2472223&sort_by=primary_release_date.desc&include_adult=true" to "AJ Raval Specials",
-        
-        // 6. Ayanna Misola Specials (ID: 3356041)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_cast=3356041&sort_by=primary_release_date.desc&include_adult=true" to "Ayanna Misola Specials",
-        
-        // 7. Christine Bermas Specials (ID: 3181347)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_cast=3181347&sort_by=primary_release_date.desc&include_adult=true" to "Christine Bermas Specials",
-        
-        // 8. Pinoy Erotic Thriller (Genre: Thriller + Tagalog)
+        // 3. Pinoy Erotic Thriller (Genre: Thriller + Tagalog)
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=tl&with_genres=53&sort_by=popularity.desc&include_adult=true" to "Pinoy Erotic Thriller",
         
-        // 9. Pinoy Sexy Drama (Genre: Drama + Tagalog)
+        // 4. Pinoy Sexy Drama (Genre: Drama + Tagalog)
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=tl&with_genres=18&sort_by=popularity.desc&include_adult=true" to "Pinoy Sexy Drama",
         
-        // 10. Pinoy Mature Romance (Genre: Romance + Tagalog)
+        // 5. Pinoy Mature Romance (Genre: Romance + Tagalog)
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=tl&with_genres=10749&sort_by=popularity.desc&include_adult=true" to "Pinoy Mature Romance"
     )
 
