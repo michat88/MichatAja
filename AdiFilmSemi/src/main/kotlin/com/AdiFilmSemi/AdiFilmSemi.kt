@@ -86,23 +86,65 @@ open class AdiFilmSemi : TmdbProvider() {
 
     }
 
-    // Menggunakan filter bahasa Tagalog (tl) dan ID Cast Aktris Vivamax Populer
-    // Kategori dikurangi sesuai permintaan
+    // KONFIGURASI KATEGORI LENGKAP (VIVAMAX + ASIA + WESTERN)
+    // Keyword Erotic Movie ID: 190370
+    // Keyword Eroticism ID: 10892
+    // Keyword Sexual Obsession ID: 9799
     override val mainPage = mainPageOf(
-        // 1. Popular (Tagalog/Vivamax)
+        // === BAGIAN 1: VIVAMAX & PINOY (JANGAN DIOTAK-ATIK) ===
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=tl&sort_by=popularity.desc&include_adult=true" to "Vivamax Popular",
-        
-        // 2. Angeli Khang Specials (ID: 3194176)
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_cast=3194176&sort_by=primary_release_date.desc&include_adult=true" to "Angeli Khang Specials",
-        
-        // 3. Pinoy Erotic Thriller (Genre: Thriller + Tagalog)
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=tl&with_genres=53&sort_by=popularity.desc&include_adult=true" to "Pinoy Erotic Thriller",
-        
-        // 4. Pinoy Sexy Drama (Genre: Drama + Tagalog)
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=tl&with_genres=18&sort_by=popularity.desc&include_adult=true" to "Pinoy Sexy Drama",
-        
-        // 5. Pinoy Mature Romance (Genre: Romance + Tagalog)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=tl&with_genres=10749&sort_by=popularity.desc&include_adult=true" to "Pinoy Mature Romance"
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=tl&with_genres=10749&sort_by=popularity.desc&include_adult=true" to "Pinoy Mature Romance",
+
+        // === BAGIAN 2: ASIA SOFT EROTIC ===
+        // Thailand (Romance/Drama + Thai)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=th&with_genres=10749,18&sort_by=popularity.desc&include_adult=true" to "Thailand Soft Erotic",
+        // Indonesia (Drama/Romance + Indo + Dewasa)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=id&with_genres=18,10749&sort_by=popularity.desc&include_adult=true" to "Indonesia Soft Drama",
+        // Chinese (Romance + Mandarin)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=zh&with_genres=10749&sort_by=popularity.desc&include_adult=true" to "Chinese Soft Romance",
+        // Taiwan (Drama + Region TW)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=zh&region=TW&with_genres=18&sort_by=popularity.desc&include_adult=true" to "Taiwan Adult Drama",
+        // Hong Kong (Thriller/Romance + Region HK)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=cn|zh&region=HK&with_genres=53,10749&sort_by=popularity.desc&include_adult=true" to "Hong Kong Softcore",
+        // Asian Classics (Jepang/Korea/China Old < 2005)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=ja|ko|zh&primary_release_date.lte=2005-01-01&with_genres=18,10749&sort_by=vote_count.desc&include_adult=true" to "Asian Adult Classics",
+
+        // === BAGIAN 3: WESTERN LATE NIGHT & CABLE CLASSICS ===
+        // Cinemax After Dark Style (Western + Erotic Movie Keyword)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=en&with_keywords=190370&sort_by=popularity.desc&include_adult=true" to "Cinemax After Dark (Barat)",
+        // Skinemax (Thriller + Erotis)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=en&with_genres=53&with_keywords=10892&sort_by=popularity.desc&include_adult=true" to "Skinemax Softcore",
+        // HBO Late Night (Romance + Eroticism)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=en&with_genres=10749&with_keywords=10892&sort_by=popularity.desc&include_adult=true" to "HBO Late Night",
+        // Showtime After Dark (Drama + Sexual Obsession)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=en&with_genres=18&with_keywords=9799&sort_by=popularity.desc&include_adult=true" to "Showtime After Dark",
+        // American Soft Erotic (General US Romance/Adult)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=en&region=US&with_genres=10749&include_adult=true&sort_by=popularity.desc" to "American Soft Erotic",
+
+        // === BAGIAN 4: EROPA ===
+        // European Mix (FR/IT/DE/ES)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=fr|it|es|de&with_genres=10749,18&include_adult=true&sort_by=popularity.desc" to "European Softcore",
+        // French (Drama + Romance)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=fr&with_genres=18,10749&include_adult=true&sort_by=popularity.desc" to "French Erotic Cinema",
+        // Italian Classics (< 2000)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=it&primary_release_date.lte=2000-01-01&with_genres=18&include_adult=true&sort_by=vote_count.desc" to "Italian Erotic Classics",
+        // UK (Inggris)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=en&region=GB&with_genres=10749,18&include_adult=true&sort_by=popularity.desc" to "UK Soft Erotic Films",
+
+        // === BAGIAN 5: MIX & JAMAN (RETRO vs MODERN) ===
+        // Retro Soft Erotic (Old < 1999, Asia + Western)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&primary_release_date.lte=1999-12-31&with_genres=10749,18&with_keywords=190370|10892&include_adult=true&sort_by=vote_count.desc" to "Retro Soft Erotic (Asia + Barat)",
+        // Modern Soft Erotic (New > 2021, Asia + Western)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&primary_release_date.gte=2021-01-01&with_genres=10749,18&with_keywords=190370|10892&include_adult=true&sort_by=popularity.desc" to "Modern Soft Erotic (Asia + Barat)",
+        // Adult Romance Mix
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=10749&with_keywords=10892&include_adult=true&sort_by=popularity.desc" to "Adult Romance Mix",
+        // Softcore International
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=190370&include_adult=true&sort_by=popularity.desc" to "Softcore International",
+        // Global Adult Drama
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=18&include_adult=true&sort_by=popularity.desc" to "Global Adult Drama"
     )
 
     private fun getImageUrl(link: String?): String? {
