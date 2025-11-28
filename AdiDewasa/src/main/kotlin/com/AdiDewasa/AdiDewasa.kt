@@ -99,56 +99,46 @@ class AdiDewasa : TmdbProvider() {
         }
     }
 
-    // --- 2. LOAD DETAIL (PERBAIKAN LOGIKA HYBRID) ---
+    // --- 2. LOAD DETAIL (PERBAIKAN: Ganti Rating ke Score) ---
     override suspend fun load(url: String): LoadResponse {
         try {
-            // A. Scrape data dasar dari Dramafull
             val doc = app.get(url).document
             val rawTitle = doc.selectFirst("div.right-info h1, h1.title")?.text() ?: "Unknown"
-            // Bersihkan judul (misal: "Eva (2021)" -> "Eva")
             val cleanTitle = rawTitle.replace(Regex("""\(\d{4}\)"""), "").trim()
             val year = Regex("""\((\d{4})\)""").find(rawTitle)?.groupValues?.get(1)?.toIntOrNull()
             
             val hasEpisodes = doc.select("div.tab-content.episode-button, .episodes-list").isNotEmpty()
             val type = if (hasEpisodes) TvType.TvSeries else TvType.Movie
             
-            // B. Cari Data Cantik di TMDB (Menggunakan super.search)
+            // B. Cari Data Cantik di TMDB
             var tmdbInfo: LoadResponse? = null
             try {
-                // Kita cari ke TMDB menggunakan judul bersih
-                val searchResults = super.search(cleanTitle)
-                
-                // Filter hasil yang tahunnya cocok (+/- 1 tahun)
-                val match = searchResults?.find { res ->
-                    val resYear = (res as? MovieSearchResponse)?.year ?: (res as? TvSeriesSearchResponse)?.year
+                val tmdbSearch = super.search(cleanTitle) ?: emptyList()
+                val match = tmdbSearch.find { searchRes ->
+                    val resYear = (searchRes as? MovieSearchResponse)?.year ?: (searchRes as? TvSeriesSearchResponse)?.year
                     if (year != null && resYear != null) {
                         kotlin.math.abs(resYear - year) <= 1
-                    } else true // Jika tahun tidak ada, ambil hasil teratas
+                    } else true
                 }
-
-                // Jika ketemu, LOAD data lengkap dari TMDB
-                if (match != null) {
+                if (match != null && match.url.isNotBlank()) {
                     tmdbInfo = super.load(match.url)
                 }
-            } catch (e: Exception) {
-                // Jika TMDB gagal, biarkan null (akan pakai fallback manual)
-            }
+            } catch (e: Exception) { }
 
-            // C. Siapkan Link Video Dramafull
+            // C. Siapkan Data Link (Episode/Video) dari Dramafull
             val videoHref = doc.selectFirst("div.last-episode a, .watch-button a")?.attr("href") ?: url
             
-            // Helper untuk membuat payload LinkData
             fun makePayload(epNum: Int?, epUrl: String): String {
-                // Coba ambil ID IMDb dari hasil TMDB (jika ada)
+                // Ambil IMDB ID dari TMDB data (menggunakan properti .url sebagai payload)
                 val tmdbImdbId = if (tmdbInfo is MovieLoadResponse) {
-                    // MovieLoadResponse biasanya tidak menyimpan IMDb ID di properti publik standar, 
-                    // tapi kita bisa berharap loadLinks akan menangani via Cinemeta fallback nanti
-                    null 
+                    try { parseJson<LinkData>(tmdbInfo.url).imdbId } catch(e:Exception){null}
+                } else if (tmdbInfo is TvSeriesLoadResponse) {
+                    try { parseJson<LinkData>(tmdbInfo.url).imdbId } catch(e:Exception){null}
                 } else null
 
                 return LinkData(
                     url = epUrl,
-                    imdbId = tmdbImdbId, // Nanti akan dicari ulang di loadLinks jika null
+                    imdbId = tmdbImdbId,
                     title = cleanTitle,
                     year = year,
                     episode = epNum,
@@ -157,10 +147,8 @@ class AdiDewasa : TmdbProvider() {
                 ).toJson()
             }
 
-            // D. Konstruksi Respon Akhir (Menggabungkan UI TMDB + Link Dramafull)
-            
+            // D. Konstruksi Respon
             if (type == TvType.TvSeries) {
-                // Parsing Episode Dramafull
                 val realEpisodes = doc.select("div.episode-item a, .episode-list a").mapNotNull {
                     val epText = it.text().trim()
                     val epNum = Regex("""(\d+)""").find(epText)?.groupValues?.get(1)?.toIntOrNull()
@@ -170,32 +158,36 @@ class AdiDewasa : TmdbProvider() {
                         newEpisode(makePayload(epNum, epHref)) {
                             this.name = "Episode ${epNum ?: epText}"
                             this.episode = epNum
-                            // Jika ada data TMDB, kita bisa coba mapping gambarnya (opsional & rumit)
                         }
                     } else null
                 }
 
                 return newTvSeriesLoadResponse(cleanTitle, url, TvType.TvSeries, realEpisodes) {
                     this.year = year
-                    // Gunakan data TMDB jika ada, jika tidak pakai scraping manual
+                    // Gunakan data TMDB jika ada
                     this.posterUrl = tmdbInfo?.posterUrl ?: doc.selectFirst("meta[property=og:image]")?.attr("content")
                     this.backgroundPosterUrl = tmdbInfo?.backgroundPosterUrl
                     this.plot = tmdbInfo?.plot ?: doc.selectFirst("div.right-info p.summary-content")?.text()
                     this.tags = tmdbInfo?.tags ?: doc.select("div.genre-list a").map { it.text() }
-                    this.rating = tmdbInfo?.rating
+                    
+                    // PERBAIKAN DI SINI: Gunakan 'score' bukan 'rating'
+                    this.score = tmdbInfo?.score
+                    
                     this.actors = tmdbInfo?.actors
                     this.recommendations = tmdbInfo?.recommendations
                 }
 
             } else {
-                // MOVIE
                 return newMovieLoadResponse(cleanTitle, url, TvType.Movie, makePayload(null, videoHref)) {
                     this.year = year
                     this.posterUrl = tmdbInfo?.posterUrl ?: doc.selectFirst("meta[property=og:image]")?.attr("content")
                     this.backgroundPosterUrl = tmdbInfo?.backgroundPosterUrl
                     this.plot = tmdbInfo?.plot ?: doc.selectFirst("div.right-info p.summary-content")?.text()
                     this.tags = tmdbInfo?.tags ?: doc.select("div.genre-list a").map { it.text() }
-                    this.rating = tmdbInfo?.rating
+                    
+                    // PERBAIKAN DI SINI: Gunakan 'score' bukan 'rating'
+                    this.score = tmdbInfo?.score
+                    
                     this.actors = tmdbInfo?.actors
                     this.recommendations = tmdbInfo?.recommendations
                 }
@@ -207,7 +199,7 @@ class AdiDewasa : TmdbProvider() {
         }
     }
 
-    // --- 3. LOAD LINKS (VIDEO & SUBTITLE) ---
+    // --- 3. LOAD LINKS ---
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
@@ -220,7 +212,6 @@ class AdiDewasa : TmdbProvider() {
             
             CoroutineScope(Dispatchers.IO).launch {
                 var finalImdbId = linkData.imdbId
-                // Cari ID via Cinemeta jika belum ada
                 if (finalImdbId.isNullOrBlank() && !linkData.title.isNullOrBlank()) {
                     finalImdbId = AdiDewasaSubtitles.getImdbIdFromCinemeta(
                         linkData.title, linkData.year, linkData.type ?: "movie"
