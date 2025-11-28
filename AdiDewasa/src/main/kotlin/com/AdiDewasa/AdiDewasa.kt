@@ -4,10 +4,10 @@ import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.newExtractorLink
+import com.lagradost.cloudstream3.utils.INFER_TYPE // Import INFER_TYPE
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
-import com.lagradost.cloudstream3.runAllAsync // Penting untuk jalan paralel
 
 class AdiDewasa : MainAPI() {
     override var mainUrl = "https://dramafull.cc"
@@ -172,13 +172,12 @@ class AdiDewasa : MainAPI() {
             val year = Regex("""\((\d{4})\)""").find(pageTitle)?.groupValues?.get(1)?.toIntOrNull()
             val cleanTitle = pageTitle.replace(Regex("""\(\d{4}\)"""), "").replace(Regex("Episode.*"), "").trim()
             
-            // Cek episode
             val episodeNum = Regex("""Episode\s*(\d+)""").find(pageTitle)?.groupValues?.get(1)?.toIntOrNull()
             val isSeries = episodeNum != null
             val seasonNum = if (isSeries) 1 else null
             val type = if (isSeries) TvType.TvSeries else TvType.Movie
 
-            // 2. VIDEO EXTRACTION (INTERNAL)
+            // 2. VIDEO EXTRACTION
             val script = doc.select("script:containsData(signedUrl)").firstOrNull()?.toString() ?: return false
             val signedUrl = Regex("""window\.signedUrl\s*=\s*"(.+?)"""").find(script)?.groupValues?.get(1)?.replace("\\/", "/") 
                 ?: return false
@@ -190,7 +189,6 @@ class AdiDewasa : MainAPI() {
             val qualities = videoSource.keys().asSequence().toList().sortedByDescending { it.toIntOrNull() ?: 0 }
             val bestQualityKey = qualities.firstOrNull()
             
-            // Kirim Link Video
             videoSource.keys().forEach { quality ->
                  val link = videoSource.getString(quality)
                  if (link.isNotEmpty()) {
@@ -199,13 +197,13 @@ class AdiDewasa : MainAPI() {
                             name,
                             "$name ($quality)",
                             link,
-                            ExtractorLinkType.INFER // Biarkan otomatis deteksi
+                            INFER_TYPE // PERBAIKAN: Menggunakan konstanta INFER_TYPE
                         )
                      )
                  }
             }
             
-            // 3. INTERNAL SUBTITLES (DARI SERVER ADIDEWASA)
+            // 3. INTERNAL SUBTITLES
             if (bestQualityKey != null) {
                 val subJson = resJson.optJSONObject("sub")
                 subJson?.optJSONArray(bestQualityKey)?.let { array ->
@@ -216,16 +214,13 @@ class AdiDewasa : MainAPI() {
                 }
             }
 
-            // 4. EXTERNAL SUBTITLES (OPENSUBTITLES & WYZIE)
-            // Dijalankan secara parallel agar tidak delay
-            runAllAsync {
-                val imdbId = getImdbIdFromTitle(cleanTitle, year, type)
-                if (imdbId != null) {
-                    // Panggil OpenSubtitles v3
-                    invokeSubtitleAPI(imdbId, seasonNum, episodeNum, subtitleCallback)
-                    // Panggil WyZIE
-                    invokeWyZIESUBAPI(imdbId, seasonNum, episodeNum, subtitleCallback)
-                }
+            // 4. EXTERNAL SUBTITLES (PERBAIKAN SYNTAX COROUTINE)
+            val imdbId = getImdbIdFromTitle(cleanTitle, year, type)
+            if (imdbId != null) {
+                runAllAsync(
+                    { invokeSubtitleAPI(imdbId, seasonNum, episodeNum, subtitleCallback) },
+                    { invokeWyZIESUBAPI(imdbId, seasonNum, episodeNum, subtitleCallback) }
+                )
             }
 
             return true
