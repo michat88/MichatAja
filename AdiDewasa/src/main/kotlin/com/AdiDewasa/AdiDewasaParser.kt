@@ -39,10 +39,10 @@ data class ApiSearchResponse(
     @JsonProperty("success") val success: Boolean? = null
 )
 
-// --- TAMBAHAN BARU UNTUK STREAMPLAY INTEGRATION ---
+// Data class untuk mengirim info dari halaman detail ke player
 data class LinkData(
-    val url: String,
-    val imdbId: String? = null,
-    val season: Int? = null,
-    val episode: Int? = null
+    @JsonProperty("url") val url: String,
+    @JsonProperty("imdbId") val imdbId: String? = null,
+    @JsonProperty("season") val season: Int? = null,
+    @JsonProperty("episode") val episode: Int? = null
 )
