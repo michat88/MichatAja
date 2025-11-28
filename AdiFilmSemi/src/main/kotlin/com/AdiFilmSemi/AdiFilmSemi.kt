@@ -86,9 +86,9 @@ open class AdiFilmSemi : TmdbProvider() {
 
     }
 
-    // Menggunakan filter bahasa Tagalog (tl), Thai (th), English (en) + Genre Dewasa
+    // LIST KATEGORI: VIVAMAX + STUDIO LEGENDARIS
     override val mainPage = mainPageOf(
-        // === VIVAMAX (PHILIPPINES) ===
+        // ================= VIVAMAX (PHILIPPINES) =================
         // 1. Popular (Tagalog/Vivamax)
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=tl&sort_by=popularity.desc&include_adult=true" to "Vivamax Popular",
         
@@ -103,20 +103,22 @@ open class AdiFilmSemi : TmdbProvider() {
         
         // 5. Pinoy Mature Romance (Genre: Romance + Tagalog)
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=tl&with_genres=10749&sort_by=popularity.desc&include_adult=true" to "Pinoy Mature Romance",
-        
-        // === THAILAND SEMI ===
-        // 6. Thai Erotic Drama (Genre: Drama + Thai)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=th&with_genres=18&sort_by=popularity.desc&include_adult=true" to "Thai Erotic Drama",
-        
-        // 7. Thai Mature Romance (Genre: Romance + Thai)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=th&with_genres=10749&sort_by=popularity.desc&include_adult=true" to "Thai Mature Romance",
 
-        // === WESTERN SEMI (BARAT) ===
-        // 8. Western Erotic Thriller (Genre: Thriller + English)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=en&with_genres=53&sort_by=popularity.desc&include_adult=true" to "Western Erotic Thriller",
-        
-        // 9. Western Mature Romance (Genre: Romance + English)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=en&with_genres=10749&sort_by=popularity.desc&include_adult=true" to "Western Mature Romance"
+        // ================= WESTERN CLASSIC STUDIOS =================
+        // 6. MRG Entertainment (Mainline Releasing) - ID: 3168
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_companies=3168|16353&sort_by=primary_release_date.desc&include_adult=true" to "MRG Entertainment",
+
+        // 7. Indigo Entertainment - ID: 3536
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_companies=3536&sort_by=primary_release_date.desc&include_adult=true" to "Indigo Entertainment",
+
+        // 8. New City Releasing - ID: 2344
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_companies=2344&sort_by=primary_release_date.desc&include_adult=true" to "New City Releasing",
+
+        // 9. Cinepix Film (Cinépix) - ID: 85
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_companies=85&sort_by=primary_release_date.desc&include_adult=true" to "Cinepix Film",
+
+        // 10. Surrender Cinema - ID: 6385
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_companies=6385&sort_by=primary_release_date.desc&include_adult=true" to "Surrender Cinema"
     )
 
     private fun getImageUrl(link: String?): String? {
