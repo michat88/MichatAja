@@ -6,14 +6,30 @@ import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import java.util.Locale
 
-// Constants untuk API Subtitle & Helper
-// PERBAIKAN: Nama diganti agar tidak bentrok dengan Data Class
+// Constants
 const val OpenSubtitlesApiUrl = "https://opensubtitles-v3.strem.io"
 const val WyZIESUBAPI = "https://sub.wyzie.ru"
 const val tmdbAPI = "https://api.themoviedb.org/3"
 const val apiKey = "b030404650f279792a8d3287232358e3" 
 
-// Helper untuk mendapatkan nama bahasa
+// ================= ADIDEWASA HELPER =================
+object AdiDewasaHelper {
+    // Header statis yang kuat untuk melewati proteksi ringan
+    val headers = mapOf(
+        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "Accept-Language" to "en-US,en;q=0.9",
+        "Connection" to "keep-alive",
+        "Sec-Fetch-Dest" to "document",
+        "Sec-Fetch-Mode" to "navigate",
+        "Sec-Fetch-Site" to "none",
+        "Sec-Fetch-User" to "?1",
+        "Upgrade-Insecure-Requests" to "1",
+        "Referer" to "https://dramafull.cc/"
+    )
+}
+
+// Helper Bahasa
 fun getLanguage(code: String): String {
     return try {
         Locale(code).displayLanguage
@@ -22,7 +38,7 @@ fun getLanguage(code: String): String {
     }
 }
 
-// Helper Pintar: Mencari IMDB ID berdasarkan Judul & Tahun via TMDB
+// Helper: Cari IMDB ID via TMDB (Untuk Subtitle Eksternal)
 suspend fun getImdbIdFromTitle(title: String, year: Int?, type: TvType): String? {
     try {
         val searchType = if (type == TvType.Movie) "movie" else "tv"
@@ -32,12 +48,10 @@ suspend fun getImdbIdFromTitle(title: String, year: Int?, type: TvType): String?
             if (type == TvType.Movie) "&primary_release_year=$year" else "&first_air_date_year=$year"
         } else ""
 
-        // 1. Cari ID TMDB dulu
         val searchUrl = "$tmdbAPI/search/$searchType?api_key=$apiKey&query=$query$yearParam"
         val searchRes = app.get(searchUrl).parsedSafe<TmdbSearchResponse>()
         val result = searchRes?.results?.firstOrNull() ?: return null
 
-        // 2. Konversi TMDB ID ke IMDB ID
         val externalUrl = "$tmdbAPI/$searchType/${result.id}/external_ids?api_key=$apiKey"
         val externalRes = app.get(externalUrl).parsedSafe<TmdbExternalIds>()
 
@@ -48,7 +62,7 @@ suspend fun getImdbIdFromTitle(title: String, year: Int?, type: TvType): String?
     }
 }
 
-// 1. Fitur: OpenSubtitles v3 (via Stremio)
+// API: OpenSubtitles
 suspend fun invokeSubtitleAPI(
     imdbId: String?,
     season: Int? = null,
@@ -57,7 +71,6 @@ suspend fun invokeSubtitleAPI(
 ) {
     if (imdbId == null) return
     
-    // PERBAIKAN: Menggunakan konstanta baru OpenSubtitlesApiUrl
     val url = if (season == null) {
         "$OpenSubtitlesApiUrl/subtitles/movie/$imdbId.json"
     } else {
@@ -82,7 +95,7 @@ suspend fun invokeSubtitleAPI(
     }
 }
 
-// 2. Fitur: WyZIE Subs
+// API: WyZIE
 suspend fun invokeWyZIESUBAPI(
     imdbId: String?,
     season: Int? = null,
@@ -110,3 +123,16 @@ suspend fun invokeWyZIESUBAPI(
          e.printStackTrace()
     }
 }
+
+// --- MODEL DATA UTILS ---
+data class TmdbSearchResponse(
+    val results: List<TmdbResult>? = null
+)
+
+data class TmdbResult(
+    val id: Int? = null,
+)
+
+data class TmdbExternalIds(
+    val imdb_id: String? = null,
+)
