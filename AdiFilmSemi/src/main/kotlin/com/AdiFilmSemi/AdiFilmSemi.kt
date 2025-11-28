@@ -86,36 +86,28 @@ open class AdiFilmSemi : TmdbProvider() {
 
     }
 
-    // Menggunakan filter bahasa Tagalog (tl), ID Cast Aktris Vivamax Populer, dan Production House Thailand
+    // Menggunakan filter bahasa Tagalog (tl) + Kategori Baru (Erotis, Romantis, Perselingkuhan)
     override val mainPage = mainPageOf(
-        // --- KATEGORI VIVAMAX (YANG SUDAH ADA) ---
         // 1. Popular (Tagalog/Vivamax)
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=tl&sort_by=popularity.desc&include_adult=true" to "Vivamax Popular",
         
-        // 2. Angeli Khang Specials (ID: 3194176)
+        // 2. Film Semi Erotis (Keyword: Erotic / 190370) -> NEW
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=tl&with_keywords=190370&sort_by=popularity.desc&include_adult=true" to "Film Semi Erotis",
+
+        // 3. Film Semi Romantis (Genre: Romance / 10749) -> NEW Label
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=tl&with_genres=10749&sort_by=popularity.desc&include_adult=true" to "Film Semi Romantis",
+
+        // 4. Film Tema Perselingkuhan (Keyword: Adultery / 9830) -> NEW
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=tl&with_keywords=9830&sort_by=popularity.desc&include_adult=true" to "Film Tema Perselingkuhan",
+
+        // 5. Angeli Khang Specials (ID: 3194176) -> KEEP
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_cast=3194176&sort_by=primary_release_date.desc&include_adult=true" to "Angeli Khang Specials",
         
-        // 3. Pinoy Erotic Thriller (Genre: Thriller + Tagalog)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=tl&with_genres=53&sort_by=popularity.desc&include_adult=true" to "Pinoy Erotic Thriller",
-        
-        // 4. Pinoy Sexy Drama (Genre: Drama + Tagalog)
+        // 6. Pinoy Sexy Drama (Genre: Drama) -> KEEP
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=tl&with_genres=18&sort_by=popularity.desc&include_adult=true" to "Pinoy Sexy Drama",
         
-        // 5. Pinoy Mature Romance (Genre: Romance + Tagalog)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=tl&with_genres=10749&sort_by=popularity.desc&include_adult=true" to "Pinoy Mature Romance",
-        
-        // --- KATEGORI PRODUCTION HOUSE THAILAND (BARU DITAMBAHKAN) ---
-        // 6. GDH 559 (Company ID: 105658)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_companies=105658&sort_by=primary_release_date.desc&include_adult=true" to "GDH 559",
-
-        // 7. Sahamongkol Film International (Company ID: 1704)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_companies=1704&sort_by=primary_release_date.desc&include_adult=true" to "Sahamongkol Film International",
-
-        // 8. Five Star Production (Company ID: 2933)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_companies=2933&sort_by=primary_release_date.desc&include_adult=true" to "Five Star Production",
-
-        // 9. CJ Major Entertainment (Company ID: 106497)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_companies=106497&sort_by=primary_release_date.desc&include_adult=true" to "CJ Major Entertainment"
+        // 7. Pinoy Erotic Thriller (Genre: Thriller) -> KEEP
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=tl&with_genres=53&sort_by=popularity.desc&include_adult=true" to "Pinoy Erotic Thriller"
     )
 
     private fun getImageUrl(link: String?): String? {
