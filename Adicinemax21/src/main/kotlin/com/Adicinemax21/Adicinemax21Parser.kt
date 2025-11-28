@@ -436,7 +436,6 @@ data class NepuSearch(
     )
 }
 
-// ================== CINEMAOS MODELS ==================
 data class CinemaOsSecretKeyRequest(
     val tmdbId: String,
     val seasonId: String,
@@ -453,4 +452,10 @@ data class CinemaOSReponseData(
     val cin: String,
     val mao: String,
     val salt: String,
+)
+
+// ================== PLAYER4U MODEL ==================
+data class Player4uLinkData(
+    val name: String,
+    val url: String,
 )
