@@ -460,8 +460,6 @@ private enum class Symbol(val decimalValue: Int) {
     }
 }
 
-// ================== UTILS ASLI ==================
-
 object VidrockHelper {
     private const val Ww = "x7k9mPqT2rWvY8zA5bC3nF6hJ2lK4mN9"
 
@@ -664,5 +662,40 @@ fun getPlayer4UQuality(quality: String): Int {
         "SCR" -> Qualities.P480.value
         "TC" -> Qualities.P480.value
         else -> Qualities.Unknown.value
+    }
+}
+
+// ================= ADIDEWASA HELPER (NEW) =================
+object AdiDewasaHelper {
+    // Header statis agar terlihat seperti browser asli (Chrome Windows)
+    val headers = mapOf(
+        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36",
+        "Accept" to "application/json, text/plain, */*",
+        "Accept-Language" to "en-US,en;q=0.9",
+        "Connection" to "keep-alive",
+        "Referer" to "https://dramafull.cc/"
+    )
+
+    // Fungsi untuk membersihkan judul agar mudah dicari
+    fun normalizeQuery(title: String): String {
+        return title
+            .replace(Regex("\\(\\d{4}\\)"), "") // Hapus tahun (2025)
+            .replace(Regex("[^a-zA-Z0-9\\s]"), " ") // Hapus simbol (: - !)
+            .trim()
+            .replace("\\s+".toRegex(), " ") // Hapus spasi ganda
+    }
+
+    // Fungsi pencocokan cerdas (Fuzzy Match)
+    fun isFuzzyMatch(original: String, result: String): Boolean {
+        val cleanOrg = original.lowercase().replace(Regex("[^a-z0-9]"), "")
+        val cleanRes = result.lowercase().replace(Regex("[^a-z0-9]"), "")
+
+        // Jika salah satu judul sangat pendek (misal "Adan"), harus match persis
+        if (cleanOrg.length < 5 || cleanRes.length < 5) {
+            return cleanOrg == cleanRes
+        }
+
+        // Cek apakah mengandung kata yang sama
+        return cleanOrg.contains(cleanRes) || cleanRes.contains(cleanOrg)
     }
 }
