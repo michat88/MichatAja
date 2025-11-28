@@ -14,16 +14,20 @@ const val apiKey = "b030404650f279792a8d3287232358e3"
 
 // ================= ADIDEWASA HELPER =================
 object AdiDewasaHelper {
-    // Header statis
+    // Header statis DIPERBARUI (Chrome 124) agar dianggap browser asli
     val headers = mapOf(
-        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
-        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
+        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept" to "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
         "Accept-Language" to "en-US,en;q=0.9",
         "Connection" to "keep-alive",
+        "Sec-Fetch-Dest" to "document",
+        "Sec-Fetch-Mode" to "navigate",
+        "Sec-Fetch-Site" to "same-origin",
+        "Sec-Fetch-User" to "?1",
+        "Upgrade-Insecure-Requests" to "1",
         "Referer" to "https://dramafull.cc/"
     )
 
-    // Fungsi normalisasi judul
     fun normalizeQuery(title: String): String {
         return title
             .replace(Regex("\\(\\d{4}\\)"), "") 
@@ -32,7 +36,6 @@ object AdiDewasaHelper {
             .replace("\\s+".toRegex(), " ") 
     }
 
-    // Fungsi Fuzzy Match
     fun isFuzzyMatch(original: String, result: String): Boolean {
         val cleanOrg = original.lowercase().replace(Regex("[^a-z0-9]"), "")
         val cleanRes = result.lowercase().replace(Regex("[^a-z0-9]"), "")
