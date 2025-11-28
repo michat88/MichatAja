@@ -2,8 +2,7 @@ package com.AdiDewasa
 
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.metaproviders.TmdbProvider
-import com.lagradost.cloudstream3.utils.ExtractorLink
-import com.lagradost.cloudstream3.utils.INFER_TYPE
+import com.lagradost.cloudstream3.utils.*
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
@@ -93,13 +92,11 @@ class AdiDewasa : TmdbProvider() {
     }
 
     // --- HYBRID LOAD LOGIC ---
-    // PERBAIKAN UTAMA: Mengembalikan LoadResponse? (Nullable) untuk mengatasi "Not Implemented"
     override suspend fun load(url: String): LoadResponse? {
         // Ambil dokumen asli dari dramafull.cc terlebih dahulu
         val doc = try {
             app.get(url).document
         } catch (e: Exception) {
-            // Jika gagal load URL utama, kembalikan null agar CS menangani error
             return null
         }
 
@@ -121,7 +118,6 @@ class AdiDewasa : TmdbProvider() {
             val year = yearMatch?.groupValues?.get(1)?.toIntOrNull()
 
             // 3. Cari di TMDb dengan Safety Check
-            // Kita bungkus search ini karena film dewasa sering tidak ada di TMDb
             val tmdbSearch = this.search(cleanTitle)?.firstOrNull { 
                 val resYear = (it as? MovieSearchResponse)?.year
                 if (year != null && resYear != null) {
@@ -143,7 +139,7 @@ class AdiDewasa : TmdbProvider() {
                         this.year = tmdbLoad.year
                         this.plot = tmdbLoad.plot
                         this.tags = tmdbLoad.tags
-                        this.score = tmdbLoad.score
+                        this.score = tmdbLoad.score // Menggunakan sistem score baru
                         this.actors = tmdbLoad.actors
                         this.recommendations = tmdbLoad.recommendations
                         this.duration = tmdbLoad.duration
@@ -152,13 +148,11 @@ class AdiDewasa : TmdbProvider() {
                 }
             }
         } catch (e: Exception) {
-            // Jika terjadi error SAAT mencari ke TMDb (misal timeout atau parse error),
-            // JANGAN CRASH. Lanjut saja ke loadManual di bawah.
+            // Jika terjadi error saat ke TMDb, lanjut ke manual
             e.printStackTrace()
         }
 
         // --- FALLBACK KE MANUAL ---
-        // Jika kode sampai sini, berarti film tidak ada di TMDb atau error.
         return loadManual(url, doc, TvType.Movie)
     }
 
@@ -170,7 +164,6 @@ class AdiDewasa : TmdbProvider() {
         val year = Regex("""\((\d{4})\)""").find(title)?.groupValues?.get(1)?.toIntOrNull()
         val description = doc.selectFirst("div.right-info p.summary-content, .summary p")?.text() ?: ""
         
-        // Rekomendasi
         val recs = doc.select("div.film_list-wrap div.flw-item, .recommendations .item").mapNotNull {
             val recTitle = it.selectFirst("img")?.attr("alt") ?: it.selectFirst("h3, .title")?.text() ?: ""
             val recImg = it.selectFirst("img")?.attr("data-src") ?: it.selectFirst("img")?.attr("src") ?: ""
