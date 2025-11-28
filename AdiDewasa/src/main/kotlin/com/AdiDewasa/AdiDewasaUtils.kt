@@ -1,31 +1,19 @@
 package com.AdiDewasa
 
-import android.util.Base64
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.Qualities
-import com.lagradost.cloudstream3.utils.getQualityFromName
 import com.lagradost.nicehttp.RequestBodyTypes
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
-import org.json.JSONObject
-import java.net.URL
 import java.net.URI
-import java.net.URLDecoder
-import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
-import java.security.MessageDigest
-import java.text.SimpleDateFormat
-import java.util.*
+import java.net.URL
+import java.util.Locale
 import javax.crypto.Cipher
 import javax.crypto.Mac
-import javax.crypto.SecretKeyFactory
-import javax.crypto.spec.GCMParameterSpec
-import javax.crypto.spec.IvParameterSpec
-import javax.crypto.spec.PBEKeySpec
 import javax.crypto.spec.SecretKeySpec
 import kotlin.math.max
 import kotlin.text.isLowerCase
@@ -255,13 +243,6 @@ fun generateHashedString(): String {
     return repeated.substring(0, max(s.length, 128))
 }
 
-// NOTE: Data Classes for CinemaOS must be in Parser.kt, here we only use them
-// Pastikan CinemaOsSecretKeyRequest dan CinemaOSReponseData ada di AdiDewasaParser.kt
-
-/* Fungsi cinemaOSGenerateHash dan cinemaOSDecryptResponse di sini 
-   akan menggunakan properti dari parameter yang di-passing dari Extractor.
-*/
-
 fun hexStringToByteArray(hex: String): ByteArray {
     val len = hex.length
     val data = ByteArray(len / 2)
@@ -273,7 +254,16 @@ fun hexStringToByteArray(hex: String): ByteArray {
     return data
 }
 
-// ================= ANIME HELPERS =================
+// ================= ANIME HELPERS (FIXED) =================
+
+fun getSeason(month: Int?): String? {
+    val seasons = arrayOf(
+        "Winter", "Winter", "Spring", "Spring", "Spring", "Summer",
+        "Summer", "Summer", "Fall", "Fall", "Fall", "Winter"
+    )
+    if (month == null) return null
+    return seasons[month - 1]
+}
 
 suspend fun convertTmdbToAnimeId(title: String?, date: String?, airedDate: String?, type: TvType): AniIds {
     val sDate = date?.split("-")
@@ -289,4 +279,50 @@ suspend fun convertTmdbToAnimeId(title: String?, date: String?, airedDate: Strin
         val ids = tmdbToAnimeId(title, year, season, type)
         if (ids.id == null && ids.idMal == null) tmdbToAnimeId(title, airedYear, airedSeason, type) else ids
     }
+}
+
+suspend fun tmdbToAnimeId(title: String?, year: Int?, season: String?, type: TvType): AniIds {
+    val query = """
+        query (
+          ${'$'}page: Int = 1
+          ${'$'}search: String
+          ${'$'}sort: [MediaSort] = [POPULARITY_DESC, SCORE_DESC]
+          ${'$'}type: MediaType
+          ${'$'}season: MediaSeason
+          ${'$'}seasonYear: Int
+          ${'$'}format: [MediaFormat]
+        ) {
+          Page(page: ${'$'}page, perPage: 20) {
+            media(
+              search: ${'$'}search
+              sort: ${'$'}sort
+              type: ${'$'}type
+              season: ${'$'}season
+              seasonYear: ${'$'}seasonYear
+              format_in: ${'$'}format
+            ) {
+              id
+              idMal
+            }
+          }
+        }
+    """.trimIndent().trim()
+
+    val variables = mapOf(
+        "search" to title,
+        "sort" to "SEARCH_MATCH",
+        "type" to "ANIME",
+        "season" to season?.uppercase(),
+        "seasonYear" to year,
+        "format" to listOf(if (type == TvType.AnimeMovie) "MOVIE" else "TV")
+    ).filterValues { value -> value != null && value.toString().isNotEmpty() }
+
+    val data = mapOf(
+        "query" to query,
+        "variables" to variables
+    ).toJson().toRequestBody(RequestBodyTypes.JSON.toMediaTypeOrNull())
+
+    val res = app.post(anilistAPI, requestBody = data)
+        .parsedSafe<AniSearch>()?.data?.Page?.media?.firstOrNull()
+    return AniIds(res?.id, res?.idMal)
 }
