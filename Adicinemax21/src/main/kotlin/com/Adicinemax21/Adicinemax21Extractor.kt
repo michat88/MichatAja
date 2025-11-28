@@ -17,10 +17,120 @@ import okhttp3.MediaType.Companion.toMediaTypeOrNull
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
+import java.net.URLEncoder
 import com.Adicinemax21.Adicinemax21.Companion.cinemaOSApi
 import com.Adicinemax21.Adicinemax21.Companion.Player4uApi
 
 object Adicinemax21Extractor : Adicinemax21() {
+
+    // ================== ADIDEWASA / DRAMAFULL SOURCE (NEW) ==================
+    @Suppress("UNCHECKED_CAST")
+    suspend fun invokeAdiDewasa(
+        title: String,
+        year: Int?,
+        season: Int?,
+        episode: Int?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        val baseUrl = "https://dramafull.cc"
+        
+        // 1. PEMBERSIHAN JUDUL
+        val cleanQuery = AdiDewasaHelper.normalizeQuery(title)
+        val encodedQuery = URLEncoder.encode(cleanQuery, "UTF-8").replace("+", "%20")
+        val searchUrl = "$baseUrl/api/live-search/$encodedQuery"
+
+        try {
+            // Gunakan Header untuk SEARCHING (Wajib ada)
+            val searchRes = app.get(searchUrl, headers = AdiDewasaHelper.headers).parsedSafe<AdiDewasaSearchResponse>()
+            
+            // 2. PENCOCOKAN JUDUL
+            val matchedItem = searchRes?.data?.find { item ->
+                val itemTitle = item.title ?: item.name ?: ""
+                AdiDewasaHelper.isFuzzyMatch(title, itemTitle)
+            } ?: searchRes?.data?.firstOrNull()
+
+            if (matchedItem == null) return 
+
+            val slug = matchedItem.slug ?: return
+            var targetUrl = "$baseUrl/film/$slug"
+
+            // 3. LOAD HALAMAN FILM
+            val doc = app.get(targetUrl, headers = AdiDewasaHelper.headers).document
+
+            if (season != null && episode != null) {
+                // SERIAL TV
+                val episodeHref = doc.select("div.episode-item a, .episode-list a").find { 
+                    val text = it.text().trim()
+                    val epNum = Regex("""(\d+)""").find(text)?.groupValues?.get(1)?.toIntOrNull()
+                    epNum == episode
+                }?.attr("href")
+
+                if (episodeHref == null) return
+                targetUrl = fixUrl(episodeHref, baseUrl)
+            } else {
+                // FILM MOVIE
+                val selectors = listOf(
+                    "a.btn-watch", 
+                    "a.watch-now", 
+                    ".watch-button a", 
+                    "div.last-episode a",
+                    ".film-buttons a.btn-primary"
+                )
+                
+                var foundUrl: String? = null
+                for (selector in selectors) {
+                    val el = doc.selectFirst(selector)
+                    if (el != null) {
+                        val href = el.attr("href")
+                        if (href.isNotEmpty() && !href.contains("javascript") && href != "#") {
+                            foundUrl = fixUrl(href, baseUrl)
+                            break
+                        }
+                    }
+                }
+                if (foundUrl != null) targetUrl = foundUrl
+            }
+
+            // 5. EKSTRAKSI VIDEO
+            val docPage = app.get(targetUrl, headers = AdiDewasaHelper.headers).document
+            val allScripts = docPage.select("script").joinToString(" ") { it.data() }
+            
+            val signedUrl = Regex("""signedUrl\s*=\s*["']([^"']+)["']""").find(allScripts)?.groupValues?.get(1)?.replace("\\/", "/") 
+                ?: return
+            
+            val jsonResponseText = app.get(signedUrl, referer = targetUrl, headers = AdiDewasaHelper.headers).text
+            val jsonObject = tryParseJson<Map<String, Any>>(jsonResponseText) ?: return
+            val videoSource = jsonObject["video_source"] as? Map<String, String> ?: return
+            
+            videoSource.forEach { (quality, url) ->
+                 if (url.isNotEmpty()) {
+                    callback.invoke(
+                        newExtractorLink(
+                            "AdiDewasa",
+                            "AdiDewasa ($quality)",
+                            url,
+                            INFER_TYPE 
+                        )
+                    )
+                }
+            }
+             
+             // SUBTITLE
+             val bestQualityKey = videoSource.keys.maxByOrNull { it.toIntOrNull() ?: 0 } ?: return
+             val subJson = jsonObject["sub"] as? Map<String, Any>
+             val subs = subJson?.get(bestQualityKey) as? List<String>
+             subs?.forEach { subPath ->
+                 val subUrl = fixUrl(subPath, baseUrl)
+                 subtitleCallback.invoke(
+                     newSubtitleFile("English", subUrl)
+                 )
+             }
+             
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
 
     // ================== ADIMOVIEBOX SOURCE ==================
     suspend fun invokeAdimoviebox(
@@ -953,7 +1063,7 @@ object Adicinemax21Extractor : Adicinemax21() {
 
     }
 
-    // ================== CINEMAOS SOURCE (FINAL & UPDATED) ==================
+    // ================== CINEMAOS SOURCE (SMART FILTERED) ==================
     suspend fun invokeCinemaOS(
         imdbId: String? = null,
         tmdbId: Int? = null,
@@ -996,35 +1106,31 @@ object Adicinemax21Extractor : Adicinemax21() {
             val decryptedJson = cinemaOSDecryptResponse(sourceResponse?.data)
             val json = parseCinemaOSSources(decryptedJson.toString())
             
-            // DAFTAR SERVER YANG DIBLOKIR
+            // SMART FILTER: 
+            // 1. BLOKIR SERVER JELEK
             val blockedServers = listOf(
                 "Maphisto", "Noah", "Bolt", "Zeus", "Nexus", 
                 "Apollo", "Kratos", "Flick", "Hollywood", 
-                "Flash", "Ophim", "Bollywood", "Apex", "Universe", "Rizz", // Blokir Rizz juga dari daftar ini? TUNGGU DULU.
+                "Flash", "Ophim", "Bollywood", "Apex", "Universe", 
+                // "Rizz",  <-- RIZZ KITA IZINKAN (WHITELIST)
                 "Hindi", "Bengali", "Tamil", "Telugu" 
             )
             
-            // Hapus "Rizz" dari daftar blokir karena kita mau allow/whitelist dia secara khusus jika ada.
+            // Hapus "Rizz" dari daftar blokir (jaga-jaga)
             val finalBlocked = blockedServers.filter { !it.equals("Rizz", ignoreCase = true) }
 
-            // Filter dan Urutkan
-            val validSources = json.filter {
+            // 2. PRIORITASKAN RIZZ DI ATAS
+            val sortedSources = json.filter {
                 val serverName = it["server"] ?: ""
                 // Cek apakah server ada di daftar blokir
                 val isBlocked = finalBlocked.any { blocked -> serverName.contains(blocked, ignoreCase = true) }
                 !isBlocked
             }.sortedByDescending { 
-                // Prioritaskan "Rizz" agar selalu di paling atas (index 0)
+                // Jika nama server mengandung "Rizz", taruh di paling atas (index 0)
                 (it["server"] ?: "").contains("Rizz", ignoreCase = true)
             }
 
-            validSources.forEach {
-                val serverName = it["server"] ?: ""
-                
-                // Tambahan filter double-check jika user ingin STRICT RIZZ ONLY
-                // Jika ingin STRICT (hanya rizz, yg lain tdk muncul), uncomment baris di bawah:
-                // if (!serverName.contains("Rizz", ignoreCase = true)) return@forEach
-
+            sortedSources.forEach {
                 val extractorLinkType = when {
                     it["type"]?.contains("hls", true) == true -> ExtractorLinkType.M3U8
                     it["type"]?.contains("dash", true) == true -> ExtractorLinkType.DASH
@@ -1067,7 +1173,6 @@ object Adicinemax21Extractor : Adicinemax21() {
         val baseQuery = queryWithEpisode ?: title.orEmpty()
         val encodedQuery = baseQuery.replace(" ", "+")
 
-        // Fetch pages concurrently (up to 5 pages)
         val pageRange = 0..4
         val deferredPages = pageRange.map { page ->
             async {
@@ -1080,7 +1185,6 @@ object Adicinemax21Extractor : Adicinemax21() {
 
         val allLinks = deferredPages.awaitAll().flatten().toMutableSet()
 
-        // Fallback if no links found and season is null
         if (allLinks.isEmpty() && season == null) {
             val fallbackUrl = "$Player4uApi/embed?key=${title?.replace(" ", "+")}"
             val fallbackDoc = runCatching { app.get(fallbackUrl, timeout = 20).document }.getOrNull()
@@ -1089,7 +1193,6 @@ object Adicinemax21Extractor : Adicinemax21() {
             }
         }
 
-        // Process each link concurrently
         allLinks.distinctBy { it.name }.map { link ->
             async {
                 try {
@@ -1127,7 +1230,6 @@ object Adicinemax21Extractor : Adicinemax21() {
     private fun extractPlayer4uLinks(document: Document, season:Int?, episode:Int?, title:String, year:Int?): List<Player4uLinkData> {
         return document.select(".playbtnx").mapNotNull { element ->
             val titleText = element.text()?.split(" | ")?.lastOrNull() ?: return@mapNotNull null
-            //fix adult content
             if (season == null && episode == null) {
                 if (year != null && (titleText.startsWith("$title $year", ignoreCase = true) ||
                             titleText.startsWith("$title ($year)", ignoreCase = true))) {
