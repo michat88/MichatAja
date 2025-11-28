@@ -34,8 +34,15 @@ data class Link(
     @JsonProperty("active") val active: Boolean? = null
 )
 
-// Ganti nama class SearchResponse untuk menghindari konflik
 data class ApiSearchResponse(
     @JsonProperty("data") val data: List<MediaItem>? = null,
     @JsonProperty("success") val success: Boolean? = null
+)
+
+// --- TAMBAHAN BARU UNTUK STREAMPLAY INTEGRATION ---
+data class LinkData(
+    val url: String,
+    val imdbId: String? = null,
+    val season: Int? = null,
+    val episode: Int? = null
 )
