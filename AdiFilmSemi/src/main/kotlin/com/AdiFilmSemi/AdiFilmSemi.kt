@@ -86,9 +86,9 @@ open class AdiFilmSemi : TmdbProvider() {
 
     }
 
-    // LIST KATEGORI: VIVAMAX + STUDIO LEGENDARIS
+    // Menggunakan filter bahasa Tagalog (tl), ID Cast Aktris Vivamax Populer, dan Production House Thailand
     override val mainPage = mainPageOf(
-        // ================= VIVAMAX (PHILIPPINES) =================
+        // --- KATEGORI VIVAMAX (YANG SUDAH ADA) ---
         // 1. Popular (Tagalog/Vivamax)
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=tl&sort_by=popularity.desc&include_adult=true" to "Vivamax Popular",
         
@@ -103,22 +103,19 @@ open class AdiFilmSemi : TmdbProvider() {
         
         // 5. Pinoy Mature Romance (Genre: Romance + Tagalog)
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=tl&with_genres=10749&sort_by=popularity.desc&include_adult=true" to "Pinoy Mature Romance",
+        
+        // --- KATEGORI PRODUCTION HOUSE THAILAND (BARU DITAMBAHKAN) ---
+        // 6. GDH 559 (Company ID: 105658)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_companies=105658&sort_by=primary_release_date.desc&include_adult=true" to "GDH 559",
 
-        // ================= WESTERN CLASSIC STUDIOS =================
-        // 6. MRG Entertainment (Mainline Releasing) - ID: 3168
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_companies=3168|16353&sort_by=primary_release_date.desc&include_adult=true" to "MRG Entertainment",
+        // 7. Sahamongkol Film International (Company ID: 1704)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_companies=1704&sort_by=primary_release_date.desc&include_adult=true" to "Sahamongkol Film International",
 
-        // 7. Indigo Entertainment - ID: 3536
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_companies=3536&sort_by=primary_release_date.desc&include_adult=true" to "Indigo Entertainment",
+        // 8. Five Star Production (Company ID: 2933)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_companies=2933&sort_by=primary_release_date.desc&include_adult=true" to "Five Star Production",
 
-        // 8. New City Releasing - ID: 2344
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_companies=2344&sort_by=primary_release_date.desc&include_adult=true" to "New City Releasing",
-
-        // 9. Cinepix Film (Cinépix) - ID: 85
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_companies=85&sort_by=primary_release_date.desc&include_adult=true" to "Cinepix Film",
-
-        // 10. Surrender Cinema - ID: 6385
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_companies=6385&sort_by=primary_release_date.desc&include_adult=true" to "Surrender Cinema"
+        // 9. CJ Major Entertainment (Company ID: 106497)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_companies=106497&sort_by=primary_release_date.desc&include_adult=true" to "CJ Major Entertainment"
     )
 
     private fun getImageUrl(link: String?): String? {
