@@ -1,5 +1,6 @@
 package com.AdiFilmSemi
 
+import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.APIHolder.capitalize
 import com.lagradost.cloudstream3.APIHolder.unixTimeMS
@@ -1241,6 +1242,131 @@ object AdiFilmSemiExtractor : AdiFilmSemi() {
                     Player4uLinkData(name = titleText, url = element.attr("onclick"))
                 } else null
             }
+        }
+    }
+
+    // ================== YFLIX SOURCE (INTEGRATED) ==================
+    // Requires: MegaUp Extractor in Extractors.kt
+    
+    suspend fun invokeYflix(
+        title: String,
+        year: Int?,
+        season: Int?,
+        episode: Int?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        val mainUrl = "https://yflix.to"
+        
+        // --- API KEYS RAHASIA (DARI CLASSES.DEX) ---
+        // Digunakan untuk mengenkripsi query search & decode ID
+        val YFX_ENC_API = "https://enc-dec.app/api/enc-movies-flix" 
+        // Digunakan untuk decrypt iframe final
+        val YFX_DEC_API = "https://enc-dec.app/api/dec-movies-flix" 
+
+        try {
+            // 1. HELPER: Fungsi Decode/Encode sesuai logika Yflix.kt
+            suspend fun yflixDecode(text: String): String? {
+                return try {
+                    // Yflix.kt menggunakan GET ke endpoint ENC untuk decode ID (aneh tapi begitu kodenya)
+                    val res = app.get("$YFX_ENC_API?text=$text").text
+                    JSONObject(res).getString("result")
+                } catch (e: Exception) { null }
+            }
+
+            suspend fun yflixDecodeReverse(text: String): String? {
+                return try {
+                    val jsonBody = """{"text":"$text"}""".toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
+                    val res = app.post(YFX_DEC_API, requestBody = jsonBody).text
+                    JSONObject(res).getString("result")
+                } catch (e: Exception) { null }
+            }
+
+            // 2. SEARCHING
+            // Yflix butuh delay agar terlihat seperti manusia
+            // delay(1000) 
+
+            val searchHeaders = mapOf(
+                "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+                "Referer" to "$mainUrl/"
+            )
+
+            val searchUrl = "$mainUrl/browser?keyword=$title"
+            val searchDoc = app.get(searchUrl, headers = searchHeaders).document
+            
+            // Cari item yang cocok (Title & Year)
+            val targetItem = searchDoc.select("div.film-section.md div.item").find { 
+                val iTitle = it.select("a.title").text().trim()
+                val iLink = it.select("a.poster").attr("href")
+                // Logika pencocokan sederhana
+                iTitle.equals(title, true) || iTitle.contains(title, true)
+            }
+
+            val itemPath = targetItem?.select("a.poster")?.attr("href") ?: return
+            val keyword = itemPath.substringAfter("/watch/").substringBefore(".")
+            
+            // 3. LOAD PAGE & DATA ID
+            val pageUrl = fixUrl(itemPath, mainUrl)
+            val pageDoc = app.get(pageUrl, headers = searchHeaders).document
+            
+            val dataId = pageDoc.select("#movie-rating").attr("data-id")
+            val decodedDataId = yflixDecode(dataId) ?: return
+
+            // 4. GET EPISODES / LINKS
+            val ajaxUrl = "$mainUrl/ajax/episodes/list?keyword=$keyword&id=$dataId&_=$decodedDataId"
+            val ajaxDoc = Jsoup.parse(app.get(ajaxUrl, headers = searchHeaders).parsedSafe<YflixAjaxResponse>()?.getDocument()?.outerHtml() ?: return)
+
+            val targetEid = if (season != null && episode != null) {
+                // Logic TV Series
+                val seasonBlock = ajaxDoc.select("ul.episodes[data-season=$season]")
+                seasonBlock.select("a[num=$episode]").attr("eid")
+            } else {
+                // Logic Movie
+                ajaxDoc.select("ul.episodes a").firstOrNull()?.attr("eid")
+            } ?: return
+
+            if (targetEid.isEmpty()) return
+
+            // 5. GET SERVER LIST
+            val decodedEid = yflixDecode(targetEid)
+            val linksUrl = "$mainUrl/ajax/links/list?eid=$targetEid&_=$decodedEid"
+            val linksDoc = Jsoup.parse(app.get(linksUrl, headers = searchHeaders).parsedSafe<YflixAjaxResponse>()?.getDocument()?.outerHtml() ?: return)
+
+            // 6. PROCESS SERVERS
+            linksDoc.select("li.server").forEach { server ->
+                val lid = server.attr("data-lid")
+                if (lid.isNotBlank()) {
+                    val decodedLid = yflixDecode(lid)
+                    val viewUrl = "$mainUrl/ajax/links/view?id=$lid&_=$decodedLid"
+                    
+                    val viewJson = app.get(viewUrl, headers = searchHeaders).parsedSafe<YflixAjaxResponse>()
+                    val resultEncrypted = viewJson?.result
+                    
+                    if (!resultEncrypted.isNullOrBlank()) {
+                        val finalJson = yflixDecodeReverse(resultEncrypted)
+                        if (finalJson != null) {
+                            val iframeUrl = JSONObject(finalJson).optString("url")
+                            if (iframeUrl.isNotEmpty()) {
+                                // PANGGIL EXTRACTOR MEGAUP YANG SUDAH KITA SIAPKAN
+                                loadExtractor(iframeUrl, "Yflix", subtitleCallback, callback)
+                            }
+                        }
+                    }
+                }
+            }
+
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    // Class helper untuk parsing JSON respon Yflix
+    data class YflixAjaxResponse(
+        @JsonProperty("status") val status: Boolean,
+        @JsonProperty("result") val result: String
+    ) {
+        fun getDocument(): Document {
+            return Jsoup.parse(result)
         }
     }
 
