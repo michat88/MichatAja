@@ -17,6 +17,7 @@ import com.AdiFilmSemi.AdiFilmSemiExtractor.invokeWyzie
 import com.AdiFilmSemi.AdiFilmSemiExtractor.invokeXprime
 import com.AdiFilmSemi.AdiFilmSemiExtractor.invokeCinemaOS
 import com.AdiFilmSemi.AdiFilmSemiExtractor.invokePlayer4U
+import com.AdiFilmSemi.AdiFilmSemiExtractor.invokeYflix // <-- NEW IMPORT
 import com.lagradost.cloudstream3.*
 import com.lagradost.cloudstream3.LoadResponse.Companion.addTrailer
 import com.lagradost.cloudstream3.metaproviders.TmdbProvider
@@ -337,7 +338,18 @@ open class AdiFilmSemi : TmdbProvider() {
                     callback
                 )
             },
-            // 1. Adimoviebox (Direct Source)
+            // 1. YFLIX INTEGRATED SOURCE (NEW!!)
+            {
+                invokeYflix(
+                    res.title ?: return@runAllAsync,
+                    res.year,
+                    res.season,
+                    res.episode,
+                    subtitleCallback,
+                    callback
+                )
+            },
+            // 2. Adimoviebox (Direct Source)
             {
                 invokeAdimoviebox(
                     res.title ?: return@runAllAsync,
@@ -348,7 +360,7 @@ open class AdiFilmSemi : TmdbProvider() {
                     callback
                 )
             },
-            // 2. JeniusPlay (via Idlix)
+            // 3. JeniusPlay (via Idlix)
             {
                 invokeIdlix(
                     res.title,
@@ -359,11 +371,11 @@ open class AdiFilmSemi : TmdbProvider() {
                     callback
                 )
             },
-            // 3. Vidlink
+            // 4. Vidlink
             {
                 invokeVidlink(res.id, res.season, res.episode, callback)
             },
-            // 4. Vidplay (via Vidsrccc)
+            // 5. Vidplay (via Vidsrccc)
             {
                 invokeVidsrccc(
                     res.id,
@@ -374,11 +386,11 @@ open class AdiFilmSemi : TmdbProvider() {
                     callback
                 )
             },
-            // 5. Vixsrc (Alpha)
+            // 6. Vixsrc (Alpha)
             {
                 invokeVixsrc(res.id, res.season, res.episode, callback)
             },
-            // 6. CinemaOS (Smart Filtered)
+            // 7. CinemaOS (Smart Filtered)
             {
                 invokeCinemaOS(
                     res.imdbId,
@@ -391,7 +403,7 @@ open class AdiFilmSemi : TmdbProvider() {
                     subtitleCallback
                 )
             },
-            // 7. Player4U
+            // 8. Player4U
             {
                 if (!res.isAnime) invokePlayer4U(
                     res.title,
