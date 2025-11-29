@@ -1,7 +1,8 @@
 package com.Adicinemax21
 
 import com.fasterxml.jackson.annotation.JsonProperty
-import com.Adicinemax21.Adicinemax21Extractor.invokeAdiDewasa // NEW: Import AdiDewasa
+import com.Adicinemax21.Adicinemax21Extractor.invokeAdiDewasa
+import com.Adicinemax21.Adicinemax21Extractor.invokeYflix // <-- NEW: Import Yflix
 import com.Adicinemax21.Adicinemax21Extractor.invokeAdimoviebox
 import com.Adicinemax21.Adicinemax21Extractor.invokeGomovies
 import com.Adicinemax21.Adicinemax21Extractor.invokeIdlix
@@ -93,22 +94,14 @@ open class Adicinemax21 : TmdbProvider() {
         "$tmdbAPI/tv/popular?api_key=$apiKey&region=US&without_genres=16" to "Popular TV Shows",
 
         // 2. Streaming Giants (Netflix & HBO)
-        // Netflix Series (Network ID 213)
         "$tmdbAPI/discover/tv?api_key=$apiKey&with_networks=213&sort_by=popularity.desc&without_genres=16" to "Netflix Originals",
-        // Netflix Movies (Provider ID 8)
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_watch_providers=8&watch_region=US&sort_by=popularity.desc&without_genres=16" to "Netflix Movies",
-        
-        // HBO Series (Network ID 49)
         "$tmdbAPI/discover/tv?api_key=$apiKey&with_networks=49&sort_by=popularity.desc&without_genres=16" to "HBO Originals",
-        // HBO Movies (Provider ID 384/1899 - HBO Max/Max)
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_watch_providers=384|1899&watch_region=US&sort_by=popularity.desc&without_genres=16" to "HBO Movies",
 
         // 3. Indonesian Content (Spesifik)
-        // Series Indonesia
         "$tmdbAPI/discover/tv?api_key=$apiKey&with_original_language=id&sort_by=popularity.desc" to "Indonesian Series",
-        // Movie Indonesia (Non-Horror) -> Exclude Animation(16) & Horror(27)
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=id&without_genres=16,27&sort_by=popularity.desc" to "Indonesian Movies",
-        // Movie Indonesia (Horror Only) -> Include Horror(27)
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=id&with_genres=27&without_genres=16&sort_by=popularity.desc" to "Indonesian Horror",
 
         // 4. Asian Dramas
@@ -122,7 +115,6 @@ open class Adicinemax21 : TmdbProvider() {
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=10749&sort_by=popularity.desc&without_genres=16" to "Romance Movies",
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=35&sort_by=popularity.desc&without_genres=16" to "Comedy Movies",
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=53&sort_by=popularity.desc&without_genres=16" to "Thriller Movies",
-        // Drama Movies -> Movies Lagi
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=18&sort_by=popularity.desc&without_genres=16" to "Movies Lagi",
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=12&sort_by=popularity.desc&without_genres=16" to "Adventure Movies",
         "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=9648&sort_by=popularity.desc&without_genres=16" to "Mystery Movies",
@@ -341,7 +333,7 @@ open class Adicinemax21 : TmdbProvider() {
         val res = parseJson<LinkData>(data)
 
         runAllAsync(
-            // 0. AdiDewasa (NEW from AdiDrakor - High Priority)
+            // 0. AdiDewasa (Priority)
             {
                 invokeAdiDewasa(
                     res.title ?: return@runAllAsync,
@@ -352,7 +344,18 @@ open class Adicinemax21 : TmdbProvider() {
                     callback
                 )
             },
-            // 1. Adimoviebox (Direct Source)
+            // 1. YFLIX INTEGRATED (NEW!)
+            {
+                invokeYflix(
+                    res.title ?: return@runAllAsync,
+                    res.year,
+                    res.season,
+                    res.episode,
+                    subtitleCallback,
+                    callback
+                )
+            },
+            // 2. Adimoviebox (Direct Source)
             {
                 invokeAdimoviebox(
                     res.title ?: return@runAllAsync,
@@ -363,7 +366,7 @@ open class Adicinemax21 : TmdbProvider() {
                     callback
                 )
             },
-            // 2. JeniusPlay (via Idlix)
+            // 3. JeniusPlay (via Idlix)
             {
                 invokeIdlix(
                     res.title,
@@ -374,11 +377,11 @@ open class Adicinemax21 : TmdbProvider() {
                     callback
                 )
             },
-            // 3. Vidlink
+            // 4. Vidlink
             {
                 invokeVidlink(res.id, res.season, res.episode, callback)
             },
-            // 4. Vidplay (via Vidsrccc)
+            // 5. Vidplay (via Vidsrccc)
             {
                 invokeVidsrccc(
                     res.id,
@@ -389,11 +392,11 @@ open class Adicinemax21 : TmdbProvider() {
                     callback
                 )
             },
-            // 5. Vixsrc (Alpha)
+            // 6. Vixsrc (Alpha)
             {
                 invokeVixsrc(res.id, res.season, res.episode, callback)
             },
-            // 6. CinemaOS (Smart Filtered)
+            // 7. CinemaOS (Smart Filtered)
             {
                 invokeCinemaOS(
                     res.imdbId,
@@ -406,7 +409,7 @@ open class Adicinemax21 : TmdbProvider() {
                     subtitleCallback
                 )
             },
-            // 7. Player4U
+            // 8. Player4U
             {
                 if (!res.isAnime) invokePlayer4U(
                     res.title,
