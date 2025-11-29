@@ -86,55 +86,34 @@ open class AdiFilmSemi : TmdbProvider() {
 
     }
 
-    // UPDATE: STRICT MODE menggunakan Keyword ID 155477 (Softcore)
-    // Semua kategori di bawah ini difilter ketat menggunakan "with_keywords=155477"
-    // Ini menjamin film Jepang bokep (JAV) tidak masuk karena JAV biasanya tidak punya tag ini di TMDB.
+    // UPDATE SESUAI REQUEST KHUSUS:
+    // 3 Kat Sexual Obsession (459), 3 Kat Erotic Thriller (207767), 
+    // 3 Kat Infidelity (1326), 3 Kat Eroticism (1664), Vivamax Movie & Series
     
     override val mainPage = mainPageOf(
-        // 1. Terbaru (Sesuai link user: sort by date)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=155477&sort_by=primary_release_date.desc&include_adult=true" to "Latest Softcore Updates",
-        
-        // 2. Terpopuler Global
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=155477&sort_by=popularity.desc&include_adult=true" to "Trending Softcore",
-        
-        // 3. Top Rated (Kualitas Terbaik)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=155477&sort_by=vote_average.desc&vote_count.gte=50&include_adult=true" to "All Time Best Softcore",
-        
-        // 4. Pinoy Softcore (Tagalog - STRICT Softcore Tag)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=155477&with_original_language=tl&sort_by=primary_release_date.desc&include_adult=true" to "Pinoy Softcore",
-        
-        // 5. Japanese Softcore (Murni Softcore - No JAV)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=155477&with_original_language=ja&sort_by=popularity.desc&include_adult=true" to "Japanese Softcore Cinema",
-        
-        // 6. Korean Softcore (Drama Erotis Korea)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=155477&with_original_language=ko&sort_by=primary_release_date.desc&include_adult=true" to "Korean Softcore",
-        
-        // 7. Western Softcore (Barat/Hollywood)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=155477&with_original_language=en&sort_by=popularity.desc&include_adult=true" to "Western Softcore",
-        
-        // 8. French Erotica (Perancis)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=155477&with_original_language=fr&sort_by=popularity.desc&include_adult=true" to "French Erotica",
-        
-        // 9. Italian Classics (Film Panas Italia)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=155477&with_original_language=it&sort_by=popularity.desc&include_adult=true" to "Italian Classics",
-        
-        // 10. Spanish Passion (Spanyol)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=155477&with_original_language=es&sort_by=popularity.desc&include_adult=true" to "Spanish Passion",
-        
-        // 11. Softcore Thriller (Tegang & Panas)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=155477&with_genres=53&sort_by=popularity.desc&include_adult=true" to "Softcore Thrillers",
-        
-        // 12. Softcore Drama (Cerita Dewasa)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=155477&with_genres=18&sort_by=popularity.desc&include_adult=true" to "Softcore Drama",
-        
-        // 13. Softcore Romance (Romantis Dewasa)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=155477&with_genres=10749&sort_by=popularity.desc&include_adult=true" to "Softcore Romance",
-        
-        // 14. 90s Softcore Hits (Era 90an)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=155477&primary_release_date.gte=1990-01-01&primary_release_date.lte=1999-12-31&sort_by=popularity.desc&include_adult=true" to "90s Softcore Hits",
-        
-        // 15. Asian General Softcore (Campuran Asia)
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=155477&with_original_language=zh|th|cn&sort_by=popularity.desc&include_adult=true" to "Asian Softcore Collection"
+        // GROUP 1: Sexual Obsession (Keyword 459)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=459&sort_by=primary_release_date.desc&include_adult=true" to "Sexual Obsession (New)",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=459&sort_by=popularity.desc&include_adult=true" to "Sexual Obsession (Popular)",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=459&sort_by=vote_average.desc&vote_count.gte=20&include_adult=true" to "Sexual Obsession (Top Rated)",
+
+        // GROUP 2: Erotic Thriller (Keyword 207767)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=207767&sort_by=primary_release_date.desc&include_adult=true" to "Erotic Thriller (New)",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=207767&sort_by=popularity.desc&include_adult=true" to "Erotic Thriller (Popular)",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=207767&sort_by=vote_average.desc&vote_count.gte=20&include_adult=true" to "Erotic Thriller (Top Rated)",
+
+        // GROUP 3: Infidelity / Perselingkuhan (Keyword 1326)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=1326&sort_by=primary_release_date.desc&include_adult=true" to "Infidelity/Selingkuh (New)",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=1326&sort_by=popularity.desc&include_adult=true" to "Infidelity/Selingkuh (Popular)",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=1326&sort_by=vote_average.desc&vote_count.gte=20&include_adult=true" to "Infidelity/Selingkuh (Top Rated)",
+
+        // GROUP 4: Eroticism (Keyword 1664)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=1664&sort_by=primary_release_date.desc&include_adult=true" to "Eroticism (New)",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=1664&sort_by=popularity.desc&include_adult=true" to "Eroticism (Popular)",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_keywords=1664&sort_by=vote_average.desc&vote_count.gte=20&include_adult=true" to "Eroticism (Top Rated)",
+
+        // GROUP 5: VIVAMAX OFFICIAL (Company ID 149142)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_companies=149142&sort_by=primary_release_date.desc&include_adult=true" to "Vivamax Movies (Official)",
+        "$tmdbAPI/discover/tv?api_key=$apiKey&with_companies=149142&sort_by=first_air_date.desc&include_adult=true" to "Vivamax Series (Official)"
     )
 
     private fun getImageUrl(link: String?): String? {
