@@ -19,6 +19,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import java.net.URLEncoder
+import org.json.JSONObject // <--- INI YANG HILANG TADI
 import com.AdiFilmSemi.AdiFilmSemi.Companion.cinemaOSApi
 import com.AdiFilmSemi.AdiFilmSemi.Companion.Player4uApi
 
@@ -124,7 +125,9 @@ object AdiFilmSemiExtractor : AdiFilmSemi() {
              subs?.forEach { subPath ->
                  val subUrl = fixUrl(subPath, baseUrl)
                  subtitleCallback.invoke(
-                     newSubtitleFile("English", subUrl)
+                     newSubtitleFile(
+                         "English", subUrl
+                     )
                  )
              }
              
@@ -1270,7 +1273,7 @@ object AdiFilmSemiExtractor : AdiFilmSemi() {
                 return try {
                     // Yflix.kt menggunakan GET ke endpoint ENC untuk decode ID (aneh tapi begitu kodenya)
                     val res = app.get("$YFX_ENC_API?text=$text").text
-                    JSONObject(res).getString("result")
+                    org.json.JSONObject(res).getString("result")
                 } catch (e: Exception) { null }
             }
 
@@ -1278,7 +1281,7 @@ object AdiFilmSemiExtractor : AdiFilmSemi() {
                 return try {
                     val jsonBody = """{"text":"$text"}""".toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
                     val res = app.post(YFX_DEC_API, requestBody = jsonBody).text
-                    JSONObject(res).getString("result")
+                    org.json.JSONObject(res).getString("result")
                 } catch (e: Exception) { null }
             }
 
@@ -1345,7 +1348,7 @@ object AdiFilmSemiExtractor : AdiFilmSemi() {
                     if (!resultEncrypted.isNullOrBlank()) {
                         val finalJson = yflixDecodeReverse(resultEncrypted)
                         if (finalJson != null) {
-                            val iframeUrl = JSONObject(finalJson).optString("url")
+                            val iframeUrl = org.json.JSONObject(finalJson).optString("url")
                             if (iframeUrl.isNotEmpty()) {
                                 // PANGGIL EXTRACTOR MEGAUP YANG SUDAH KITA SIAPKAN
                                 loadExtractor(iframeUrl, "Yflix", subtitleCallback, callback)
