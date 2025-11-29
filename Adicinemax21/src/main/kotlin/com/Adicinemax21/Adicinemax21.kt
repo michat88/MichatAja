@@ -2,8 +2,8 @@ package com.Adicinemax21
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.Adicinemax21.Adicinemax21Extractor.invokeAdiDewasa
-import com.Adicinemax21.Adicinemax21Extractor.invokeYflix // <-- Import Yflix
-import com.Adicinemax21.Adicinemax21Extractor.invokeKisskh // <-- Import Kisskh
+import com.Adicinemax21.Adicinemax21Extractor.invokeYflix // Integrasi Yflix
+import com.Adicinemax21.Adicinemax21Extractor.invokeKisskh // Integrasi Kisskh
 import com.Adicinemax21.Adicinemax21Extractor.invokeAdimoviebox
 import com.Adicinemax21.Adicinemax21Extractor.invokeGomovies
 import com.Adicinemax21.Adicinemax21Extractor.invokeIdlix
@@ -88,40 +88,42 @@ open class Adicinemax21 : TmdbProvider() {
 
     }
 
+    // CATATAN: Semua URL di bawah ini sudah difilter 'gte=2020-01-01' (2020 ke atas)
     override val mainPage = mainPageOf(
-        // 1. Trending & Popular
+        // 1. Trending & Popular (Fresh 2020+)
         "$tmdbAPI/trending/movie/day?api_key=$apiKey&region=US&without_genres=16" to "Trending Movies",
-        "$tmdbAPI/movie/popular?api_key=$apiKey&region=US&without_genres=16" to "Popular Movies",
-        "$tmdbAPI/tv/popular?api_key=$apiKey&region=US&without_genres=16" to "Popular TV Shows",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&sort_by=popularity.desc&primary_release_date.gte=2020-01-01&without_genres=16" to "Popular Movies (2020+)",
+        "$tmdbAPI/discover/tv?api_key=$apiKey&sort_by=popularity.desc&first_air_date.gte=2020-01-01&without_genres=16" to "Popular TV Shows (2020+)",
 
-        // 2. Streaming Giants (Netflix & HBO)
-        "$tmdbAPI/discover/tv?api_key=$apiKey&with_networks=213&sort_by=popularity.desc&without_genres=16" to "Netflix Originals",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_watch_providers=8&watch_region=US&sort_by=popularity.desc&without_genres=16" to "Netflix Movies",
-        "$tmdbAPI/discover/tv?api_key=$apiKey&with_networks=49&sort_by=popularity.desc&without_genres=16" to "HBO Originals",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_watch_providers=384|1899&watch_region=US&sort_by=popularity.desc&without_genres=16" to "HBO Movies",
+        // 2. Streaming Giants (Netflix & HBO) - 2020+
+        "$tmdbAPI/discover/tv?api_key=$apiKey&with_networks=213&sort_by=popularity.desc&first_air_date.gte=2020-01-01&without_genres=16" to "Netflix Originals (New)",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_watch_providers=8&watch_region=US&sort_by=popularity.desc&primary_release_date.gte=2020-01-01&without_genres=16" to "Netflix Movies (New)",
+        
+        "$tmdbAPI/discover/tv?api_key=$apiKey&with_networks=49&sort_by=popularity.desc&first_air_date.gte=2020-01-01&without_genres=16" to "HBO Originals (New)",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_watch_providers=384|1899&watch_region=US&sort_by=popularity.desc&primary_release_date.gte=2020-01-01&without_genres=16" to "HBO Movies (New)",
 
-        // 3. Indonesian Content (Spesifik)
-        "$tmdbAPI/discover/tv?api_key=$apiKey&with_original_language=id&sort_by=popularity.desc" to "Indonesian Series",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=id&without_genres=16,27&sort_by=popularity.desc" to "Indonesian Movies",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=id&with_genres=27&without_genres=16&sort_by=popularity.desc" to "Indonesian Horror",
+        // 3. Indonesian Content (2020+)
+        "$tmdbAPI/discover/tv?api_key=$apiKey&with_original_language=id&sort_by=popularity.desc&first_air_date.gte=2020-01-01" to "Indonesian Series (2020+)",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=id&without_genres=16,27&sort_by=popularity.desc&primary_release_date.gte=2020-01-01" to "Indonesian Movies (2020+)",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_original_language=id&with_genres=27&without_genres=16&sort_by=popularity.desc&primary_release_date.gte=2020-01-01" to "Indonesian Horror (2020+)",
 
-        // 4. Asian Dramas
-        "$tmdbAPI/discover/tv?api_key=$apiKey&with_original_language=ko&sort_by=popularity.desc&without_genres=16" to "Korean Dramas",
-        "$tmdbAPI/discover/tv?api_key=$apiKey&with_original_language=zh&sort_by=popularity.desc&without_genres=16" to "Chinese Dramas",
+        // 4. Asian Dramas (2020+)
+        "$tmdbAPI/discover/tv?api_key=$apiKey&with_original_language=ko&sort_by=popularity.desc&without_genres=16&first_air_date.gte=2020-01-01" to "Korean Dramas (2020+)",
+        "$tmdbAPI/discover/tv?api_key=$apiKey&with_original_language=zh&sort_by=popularity.desc&without_genres=16&first_air_date.gte=2020-01-01" to "Chinese Dramas (2020+)",
 
-        // 5. International Genres
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=28&sort_by=popularity.desc&without_genres=16" to "Action Movies",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=878&sort_by=popularity.desc&without_genres=16" to "Sci-Fi Movies",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=27&sort_by=popularity.desc&without_genres=16" to "Horror Movies",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=10749&sort_by=popularity.desc&without_genres=16" to "Romance Movies",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=35&sort_by=popularity.desc&without_genres=16" to "Comedy Movies",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=53&sort_by=popularity.desc&without_genres=16" to "Thriller Movies",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=18&sort_by=popularity.desc&without_genres=16" to "Movies Lagi",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=12&sort_by=popularity.desc&without_genres=16" to "Adventure Movies",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=9648&sort_by=popularity.desc&without_genres=16" to "Mystery Movies",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=14&sort_by=popularity.desc&without_genres=16" to "Fantasy Movies",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=10752&sort_by=popularity.desc&without_genres=16" to "War Movies",
-        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=80&sort_by=popularity.desc&without_genres=16" to "Crime Movies",
+        // 5. International Genres (2020+)
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=28&sort_by=popularity.desc&without_genres=16&primary_release_date.gte=2020-01-01" to "Action Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=878&sort_by=popularity.desc&without_genres=16&primary_release_date.gte=2020-01-01" to "Sci-Fi Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=27&sort_by=popularity.desc&without_genres=16&primary_release_date.gte=2020-01-01" to "Horror Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=10749&sort_by=popularity.desc&without_genres=16&primary_release_date.gte=2020-01-01" to "Romance Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=35&sort_by=popularity.desc&without_genres=16&primary_release_date.gte=2020-01-01" to "Comedy Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=53&sort_by=popularity.desc&without_genres=16&primary_release_date.gte=2020-01-01" to "Thriller Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=18&sort_by=popularity.desc&without_genres=16&primary_release_date.gte=2020-01-01" to "Movies Lagi",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=12&sort_by=popularity.desc&without_genres=16&primary_release_date.gte=2020-01-01" to "Adventure Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=9648&sort_by=popularity.desc&without_genres=16&primary_release_date.gte=2020-01-01" to "Mystery Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=14&sort_by=popularity.desc&without_genres=16&primary_release_date.gte=2020-01-01" to "Fantasy Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=10752&sort_by=popularity.desc&without_genres=16&primary_release_date.gte=2020-01-01" to "War Movies",
+        "$tmdbAPI/discover/movie?api_key=$apiKey&with_genres=80&sort_by=popularity.desc&without_genres=16&primary_release_date.gte=2020-01-01" to "Crime Movies",
     )
 
     private fun getImageUrl(link: String?): String? {
