@@ -7,8 +7,17 @@ import android.content.Context
 @CloudstreamPlugin
 class AdiFilmSemiPlugin : Plugin() {
     override fun load(context: Context) {
-        // All providers should be added in this manner. Please don't edit the providers list directly.
+        // Register Main Provider
         registerMainAPI(AdiFilmSemi())
+        
+        // Register Existing Extractors
         registerExtractorAPI(Jeniusplay2())
+        
+        // Register NEW Yflix/MegaUp Extractors
+        // Ini wajib didaftarkan agar loadExtractor("https://megaup.live/...") berfungsi
+        registerExtractorAPI(MegaUp())
+        registerExtractorAPI(Fourspromax())
+        registerExtractorAPI(Rapidairmax())
+        registerExtractorAPI(Rapidshare())
     }
 }
