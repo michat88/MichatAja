@@ -6,7 +6,7 @@ cloudstream {
     // All of these properties are optional, you can safely remove them
 
      description = "#1 AdiManu extention based on MultiAPI"
-     authors = listOf("AdiDrakor", "Trinity")
+     authors = listOf("AdiManuLateri3", "Trinity")
 
     /**
      * Status int as the following:
