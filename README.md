@@ -1,28 +1,23 @@
-# 🎬 AdiCinema+ Player (CloudStream Plugin)
+<div align="center">
+🎬 MichatAja Cloudstream Extensions
+Nonton Film & Anime Sub Indo Gratis, Lancar, Tanpa Iklan!
+☕ Traktir Kopi
+Suka dengan repo ini? Kalau repo ini bermanfaat buat nemenin gabutmu, boleh dong lempar receh buat beli kopi biar admin makin semangat update server & benerin bug! 🔥
+<a href="https://saweria.co/aldry84" target="_blank"> <img src="https://www.google.com/search?q=https://img.shields.io/badge/Saweria-Traktir_Saya-orange%3Fstyle%3Dfor-the-badge%26logo%3Dsaweria%26logoColor%3Dwhite" alt="Saweria"/> </a>
+</div>
+📥 Cara Install
+Buka aplikasi Cloudstream.
+Masuk ke Settings ⚙️ > Extensions.
+Klik tombol + Add Repository.
+Masukkan Nama (Bebas) dan URL Repository ini:
+[https://github.com/michat88/MichatAja](https://github.com/michat88/MichatAja)
 
-![CloudStream](https://img.shields.io/badge/CloudStream-Plugin-blue?style=for-the-badge)
-![Kotlin](https://img.shields.io/badge/Kotlin-1.9.0-orange?style=for-the-badge&logo=kotlin)
-![License](https://img.shields.io/github/license/username/Adicinema?style=for-the-badge)
-![Version](https://img.shields.io/badge/version-1.0.0-success?style=for-the-badge)
 
-> 🔗 **AdiCinema+ Player** adalah ekstensi untuk [CloudStream3](https://github.com/recloudstream/cloudstream) yang menyediakan akses cepat ke berbagai film dan serial dari berbagai sumber.
-
----
-
-## 🚀 Fitur Utama
-
-- 🔍 Pencarian film & serial otomatis  
-- 🎞️ Pemutar streaming langsung (Hydrax, Vidhide, Streamwish, dll)  
-- 🌎 Dukungan multi-bahasa (termasuk Indonesia)  
-- 🧩 Integrasi dengan TMDB & OMDb API  
-- 💾 Caching untuk pemuatan cepat  
-- 🧠 Desain kode modular dan ringan  
-
----
-
-## 🛠️ Cara Instalasi
-
-1. Pastikan kamu sudah menginstal aplikasi **[CloudStream](https://github.com/recloudstream/cloudstream/releases)**.
-2. Buka **CloudStream → Settings → Extensions → Repositories → Add repository**.
-3. Copy URL ini dibawah ini dan masukan ke URL repo kamu
-4. https://raw.githubusercontent.com/aldry84/amangacor2/refs/heads/builds/repo.json
+Klik Download.
+🚀 Fitur Repository
+Update Berkala: Diusahakan selalu update kalau ada provider yang mati.
+Sub Indo: Fokus ke konten subtitle Indonesia.
+Server Kencang: Dipilihkan source yang buffer-nya minim.
+⚠️ Disclaimer
+Repository ini hanya bertindak sebagai search engine (perantara) dan tidak menyimpan file video apapun di server ini. Semua konten diambil dari pihak ketiga yang tersedia secara publik di internet. Gunakan dengan bijak.
+<div align="center"> <sub>Dibuat dengan ❤️ dan ☕ oleh MichatAja</sub> </div>
