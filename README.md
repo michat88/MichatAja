@@ -28,6 +28,11 @@ Kalau repo ini bermanfaat buat nemenin gabutmu, boleh dong lempar receh buat bel
 4. Masukkan URL Repository ini; https://bit.ly/amangacor
 5. Klik **Download**.
 
+## 💡 Tips & Trik (Penting!)
+Agar pengalaman nonton makin maksimal, perhatikan hal berikut:
+- **Aktifkan NSFW**: Jangan lupa nyalakan fitur **"Show NSFW content"** di pengaturan General jika ingin mengakses konten dewasa (18+).
+- **Gunakan DNS**: Sangat disarankan mengaktifkan **DNS over HTTPS** (pilih Cloudflare atau Google) di pengaturan aplikasi untuk membuka situs/sumber yang diblokir internet positif.
+
 ## 🚀 Fitur Repository
 - **Update Berkala**: Diusahakan selalu update kalau ada provider yang mati.
 - **Sub Indo**: Fokus ke konten subtitle Indonesia.
@@ -39,4 +44,4 @@ Repository ini hanya bertindak sebagai *search engine* (perantara) dan tidak men
 ---
 <div align="center">
 <sub>Dibuat dengan ❤️ dan ☕ oleh MichatAja</sub>
-</div> 
+</div>
