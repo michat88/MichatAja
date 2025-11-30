@@ -1,8 +1,8 @@
 // use an integer for version numbers
-version = 247
+version = 17.09.88
 
 cloudstream {
-    language = "en"
+    language = "id"
     // All of these properties are optional, you can safely remove them
 
      description = "#1 AdiManu extention based on MultiAPI"
