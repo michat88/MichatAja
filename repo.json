@@ -1,0 +1,9 @@
+{
+    "name": "AmanGokilRepo",
+    "iconUrl": "https://raw.githubusercontent.com/michat88/Zaneta/refs/heads/main/Icons/RepoIcon.png",
+    "description": "Nonton Sampe Biji Mata Kaluar",
+    "manifestVersion": 1,
+    "pluginLists": [
+      "https://raw.githubusercontent.com//michat88/MichatAja/refs/heads/builds/plugins.json"
+    ]
+}
