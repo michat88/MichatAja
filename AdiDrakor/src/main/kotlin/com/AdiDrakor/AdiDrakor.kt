@@ -1,4 +1,4 @@
-package com.AdiDrakor
+package com.AdiDrako
 
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.AdiDrakor.AdiDrakorExtractor.invokeAdimoviebox
